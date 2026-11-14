@@ -2,25 +2,40 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { payTypesFor } from "@finos/engine";
 import { DATA_EVENT } from "@/components/Shell";
 import { api, day, dayYear, money } from "@/lib/api";
 
+type Kind = "income" | "loan" | "subscription" | "bill";
 type Q = {
-  key: string; name: string; amount: number; kind: "income" | "loan" | "subscription" | "bill";
+  key: string; name: string; amount: number; kind: Kind;
   cadenceDays: number; cadenceLabel: string; lastDate: string; nextDate: string; occurrences: number; category: string; source: "detected" | "candidate";
+  payType: string | null; toPerson: boolean;
 };
 type Opt = { label: string; decision: "CONTINUE" | "CHANGE" | "ENDS" | "STOP" | "ONEOFF"; ask?: "amount" | "remaining"; cadenceDays?: number };
 
+/** The follow-up options depend on what the user says the payment is for (a loan ends, a subscription gets cancelled). */
+function kindFor(q: Q, payType: string | null): Kind {
+  if (q.amount > 0) return "income";
+  const cat = payTypesFor(q.amount).find((t) => t.label === payType)?.category;
+  if (cat === "Loan/EMI") return "loan";
+  if (cat === "Subscriptions") return "subscription";
+  return cat ? "bill" : q.kind;
+}
+
 function title(q: Q) {
-  if (q.source === "candidate") return q.kind === "income" ? `Is ${q.name} regular income?` : `Does ${q.name} repeat?`;
+  if (q.source === "candidate") {
+    if (q.kind === "income") return q.toPerson ? `Do you receive money from ${q.name} regularly?` : `Is ${q.name} regular income?`;
+    return q.toPerson ? `Do you pay ${q.name} regularly?` : `Does ${q.name} repeat?`;
+  }
   if (q.kind === "income") return `Will you keep receiving ${q.name}?`;
   if (q.kind === "loan") return `Is ${q.name} still running?`;
   return `Will you keep paying ${q.name}?`;
 }
 
-function options(q: Q): Opt[] {
+function options(q: Q, kind: Kind): Opt[] {
   if (q.source === "candidate")
-    return q.kind === "income"
+    return kind === "income"
       ? [{ label: "Yes, every month", decision: "CONTINUE", cadenceDays: 30 }, { label: "No, it was one-off", decision: "ONEOFF" }]
       : [
           { label: "Every month", decision: "CONTINUE", cadenceDays: 30 },
@@ -28,9 +43,9 @@ function options(q: Q): Opt[] {
           { label: "Once a year", decision: "CONTINUE", cadenceDays: 365 },
           { label: "No, it was one-off", decision: "ONEOFF" },
         ];
-  if (q.kind === "income")
+  if (kind === "income")
     return [{ label: "Yes, same amount", decision: "CONTINUE" }, { label: "The amount will change", decision: "CHANGE", ask: "amount" }, { label: "No, it is ending", decision: "STOP" }];
-  if (q.kind === "loan")
+  if (kind === "loan")
     return [{ label: "Yes, it keeps going", decision: "CONTINUE" }, { label: "It ends after a few more payments", decision: "ENDS", ask: "remaining" }, { label: "No, it is paid off", decision: "STOP" }];
   return [
     { label: "Yes, as it is", decision: "CONTINUE" },
@@ -55,6 +70,7 @@ export default function Review() {
   const [err, setErr] = useState("");
   const [fromImport, setFromImport] = useState(false);
   const [saved, setSaved] = useState(0);
+  const [ptype, setPtype] = useState<string | null>(null);
 
   const [pf, setPf] = useState({ label: "", amount: "", direction: "out" as "out" | "in", date: "" });
   const top = useRef<HTMLDivElement>(null);
@@ -68,6 +84,8 @@ export default function Review() {
   }, []);
   useEffect(() => { setFromImport(new URLSearchParams(window.location.search).get("from") === "import"); load(); }, [load]);
   useEffect(() => { top.current?.scrollIntoView({ block: "start" }); }, [idx]);
+  // Each question starts from our guess of the payment type; null means the user has to pick one
+  useEffect(() => { setPtype(qs?.[idx]?.payType ?? null); }, [qs, idx]);
 
   if (err && !qs) return <div className="card"><p className="err" style={{ margin: 0 }}>{err}</p></div>;
   if (!qs) return <div className="skeleton" style={{ height: 380, marginTop: 24 }} />;
@@ -91,7 +109,7 @@ export default function Review() {
     try {
       await api("/plan/recurring", {
         body: {
-          key: q.key, decision: o.decision, cadenceDays: o.cadenceDays,
+          key: q.key, decision: o.decision, cadenceDays: o.cadenceDays, ...(ptype ? { payType: ptype } : {}),
           ...(o.decision === "CHANGE" ? { newAmount: Number(val) } : {}),
           ...(o.decision === "ENDS" ? { remaining: Math.round(Number(val)) } : {}),
         },
@@ -146,10 +164,28 @@ export default function Review() {
             {money(q.amount)} {q.source === "candidate" ? `paid on ${day(q.lastDate)}. We have only seen it once so far.` : `${q.cadenceLabel}, seen ${q.occurrences} times, next around ${day(q.nextDate)}.`}
           </p>
 
+          {!ask && (
+            <fieldset className="ptype">
+              <legend>
+                {q.amount < 0 ? "What is this payment for?" : "What is this money?"}
+                {!q.payType && <span className="small muted"> {q.toPerson ? "It went " + (q.amount < 0 ? "to" : "from") + " a personal account, so we can't tell on our own." : "We couldn't tell from the bank text."}</span>}
+              </legend>
+              <div className="row" style={{ gap: 8, marginTop: 10 }}>
+                {/* our guess may be a plain category (Transport, Health) that is not one of the listed types */}
+                {[...(q.payType && !payTypesFor(q.amount).some((t) => t.label === q.payType) ? [q.payType] : []), ...payTypesFor(q.amount).map((t) => t.label)].map((label) => (
+                  <button key={label} type="button" className="pchip" aria-pressed={ptype === label} disabled={busy} onClick={() => setPtype(label)}>{label}</button>
+                ))}
+              </div>
+            </fieldset>
+          )}
+
           {!ask ? (
-            <div className="row" style={{ marginTop: 24 }}>
-              {options(q).map((o) => <button key={o.label} className="btn ghost" disabled={busy} onClick={() => pick(o)}>{o.label}</button>)}
-            </div>
+            <>
+              {!ptype && <p className="small muted" style={{ marginTop: 20 }}>Pick a type above, then answer:</p>}
+              <div className="row" style={{ marginTop: ptype ? 24 : 10 }}>
+                {options(q, kindFor(q, ptype)).map((o) => <button key={o.label} className="btn ghost" disabled={busy || !ptype} onClick={() => pick(o)}>{o.label}</button>)}
+              </div>
+            </>
           ) : (
             <form style={{ marginTop: 20 }} onSubmit={(e) => { e.preventDefault(); save(ask); }}>
               <label className="f" htmlFor="ans" style={{ marginTop: 0 }}>{ask.ask === "amount" ? "New amount (₹)" : "How many payments are left, counting the next one?"}</label>
@@ -229,7 +265,7 @@ export default function Review() {
                 <div style={{ minWidth: 0 }}>
                   <div>{a.name}</div>
                   <div className="small tag">
-                    {DECISION_TEXT[a.decision]}
+                    {a.payType ? `${a.payType}, ` : ""}{DECISION_TEXT[a.decision]}
                     {a.decision === "CHANGE" && a.newAmount ? `, now ${money(a.newAmount)}` : ""}
                     {a.decision === "ENDS" && a.endDate ? `, last payment ${day(a.endDate)}` : ""}
                   </div>

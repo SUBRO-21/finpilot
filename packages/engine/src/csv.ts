@@ -27,7 +27,7 @@ export function parseCsvRows(text: string): string[][] {
   return rows;
 }
 
-function normDate(s: string): string | null {
+export function normDate(s: string): string | null {
   const t = s.trim();
   let m = t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
   if (m) return `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`;
@@ -41,7 +41,7 @@ function normDate(s: string): string | null {
   return null;
 }
 
-function num(s: string | undefined): number | null {
+export function parseAmount(s: string | undefined): number | null {
   if (s == null || s.trim() === "") return null;
   let t = s.trim();
   const neg = /^\(.*\)$/.test(t) || t.startsWith("-");
@@ -50,6 +50,7 @@ function num(s: string | undefined): number | null {
   const v = parseFloat(t);
   return Number.isFinite(v) ? (neg ? -v : v) : null;
 }
+const num = parseAmount;
 
 
 const NOISE = /Federal Bank|Ph:|Website:|Page \d+ of|DISCLAIMER|computer generated|previous working day|fullparticulars|Abbreviations|END OF STATEMENT|Interest on SB|Mobile Banking|Fund Transfer|Cash Transaction|Clearing Transaction|Transfer Transaction|responsible/i;

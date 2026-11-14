@@ -14,6 +14,22 @@ const STARTERS = [
   "Where can I cut spending the most?",
 ];
 const VERDICT: Record<string, string> = { SAFE: "Affordable", RISKY: "Tight", UNAFFORDABLE: "Likely to overdraw" };
+/** One plain sentence per verdict, for people who don't read forecasts. */
+const VERDICT_MEANING: Record<string, string> = {
+  SAFE: "You can do this. Your balance should stay comfortably above zero.",
+  RISKY: "You can do this, but there is little room left for surprises.",
+  UNAFFORDABLE: "There is a real chance your balance goes below zero. Wait, or spend less.",
+};
+
+function Stat({ label, value, meaning }: { label: string; value: string; meaning: string }) {
+  return (
+    <div>
+      <div className="small" style={{ opacity: 0.75 }}>{label}</div>
+      <div style={{ fontWeight: 500, fontSize: 18 }}>{value}</div>
+      <div className="small" style={{ opacity: 0.75, marginTop: 4, lineHeight: 1.35 }}>{meaning}</div>
+    </div>
+  );
+}
 
 /** Splits the trailing "FOLLOWUPS: a | b | c" line the model is asked to add. */
 function parseReply(raw: string) {
@@ -27,16 +43,20 @@ function SimCard({ s }: { s: Sim }) {
   return (
     <div style={{ marginTop: 18 }}>
       <div className={`verdict ${warn ? "warn" : ""}`}>
-        <div className="small" style={{ opacity: 0.8 }}>{s.label} simulated against your forecast</div>
+        <div className="small" style={{ opacity: 0.8 }}>{s.label}: we tested it against your expected balance for the next 90 days</div>
         <div className="serif" style={{ marginTop: 4 }}>{VERDICT[s.verdict]}</div>
-        <div className="stats" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 16, marginTop: 14 }}>
-          <div><div className="small" style={{ opacity: 0.75 }}>Chance below zero</div><div style={{ fontWeight: 500, fontSize: 18 }}>{pct(s.riskBefore)} to {pct(s.riskAfter)}</div></div>
-          <div><div className="small" style={{ opacity: 0.75 }}>Bad-case balance</div><div style={{ fontWeight: 500, fontSize: 18 }}>{money(s.worstBefore)} to {money(s.worstAfter)}</div></div>
-          {s.emi && <div><div className="small" style={{ opacity: 0.75 }}>Monthly EMI</div><div style={{ fontWeight: 500, fontSize: 18 }}>{money(s.emi)}</div></div>}
+        <div style={{ marginTop: 4 }}>{VERDICT_MEANING[s.verdict]}</div>
+        <div className="stats" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 16, marginTop: 14 }}>
+          <Stat label="Chance below zero" value={`${pct(s.riskBefore)} to ${pct(s.riskAfter)}`}
+            meaning="How likely your balance drops under ₹0 in the next 90 days: now, then after this." />
+          <Stat label="Bad-case balance" value={`${money(s.worstBefore)} to ${money(s.worstAfter)}`}
+            meaning="The lowest your balance could fall if the coming months go badly (a 1-in-10 chance)." />
+          {s.emi && <Stat label="Monthly EMI" value={money(s.emi)} meaning="What you would repay to the lender every month, interest included." />}
         </div>
       </div>
       <div className="float" style={{ marginTop: 14, padding: "20px 20px 14px" }}>
         <ForecastChart points={s.points} start={s.start} baseline={s.baseline} />
+        <p className="small muted" style={{ marginTop: 8 }}>The solid line is your expected balance each day with this decision, the dashed line without it. The shaded band is the likely range: real life usually lands inside it.</p>
       </div>
     </div>
   );

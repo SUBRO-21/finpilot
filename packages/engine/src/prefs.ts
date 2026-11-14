@@ -1,5 +1,6 @@
 import { normalizeKey } from "./recurring";
 import type { RecurringItem, Txn } from "./types";
+import { nextAfter } from "./util";
 
 export type Decision = "CONTINUE" | "CHANGE" | "ENDS" | "STOP" | "ONEOFF";
 
@@ -13,15 +14,12 @@ export interface Pref {
   category: string;
   newAmount?: number | null;
   endDay?: number | null;
+  payType?: string | null;
 }
 
 export const keyOf = (t: { description: string; amount: number }) => (t.amount < 0 ? "-" : "+") + normalizeKey(t.description);
 
-const rollNext = (lastDay: number, cadence: number, asOfDay: number) => {
-  let n = lastDay + cadence;
-  while (n <= asOfDay) n += cadence;
-  return n;
-};
+const rollNext = (lastDay: number, cadence: number, asOfDay: number) => nextAfter(lastDay, cadence, asOfDay);
 
 /**
  * Merges the user's answers into detected recurring items:
@@ -39,10 +37,11 @@ export function applyPrefs(detected: RecurringItem[], prefs: Pref[], asOfDay: nu
     const p = byKey.get(r.key);
     if (!p) { out.push({ ...r, source: "detected" }); continue; }
     const sign = r.amount < 0 ? -1 : 1;
-    if (p.decision === "STOP") out.push({ ...r, stopped: true, pref: "STOP", userConfirmed: true });
-    else if (p.decision === "CHANGE" && p.newAmount) out.push({ ...r, amount: sign * Math.abs(p.newAmount), pref: "CHANGE", userConfirmed: true });
-    else if (p.decision === "ENDS") out.push({ ...r, endDay: p.endDay ?? undefined, pref: "ENDS", userConfirmed: true });
-    else out.push({ ...r, pref: p.decision, userConfirmed: true });
+    const base = { ...r, payType: p.payType ?? undefined };
+    if (p.decision === "STOP") out.push({ ...base, stopped: true, pref: "STOP", userConfirmed: true });
+    else if (p.decision === "CHANGE" && p.newAmount) out.push({ ...base, amount: sign * Math.abs(p.newAmount), pref: "CHANGE", userConfirmed: true });
+    else if (p.decision === "ENDS") out.push({ ...base, endDay: p.endDay ?? undefined, pref: "ENDS", userConfirmed: true });
+    else out.push({ ...base, pref: p.decision, userConfirmed: true });
   }
   for (const p of prefs) {
     if (seen.has(p.key) || !["CONTINUE", "CHANGE", "ENDS", "STOP"].includes(p.decision)) continue;
@@ -55,19 +54,26 @@ export function applyPrefs(detected: RecurringItem[], prefs: Pref[], asOfDay: nu
       cadenceLabel: p.cadenceDays <= 8 ? "weekly" : p.cadenceDays <= 16 ? "fortnightly" : p.cadenceDays <= 40 ? "monthly" : p.cadenceDays <= 120 ? "quarterly" : "yearly",
       lastDay: p.lastDay, nextDay, confidence: 0.9, occurrences: txnIds.length, txnIds, category: p.category,
       endDay: p.decision === "ENDS" ? p.endDay ?? undefined : undefined, pref: p.decision, userConfirmed: true,
-      stopped: p.decision === "STOP" || undefined,
+      stopped: p.decision === "STOP" || undefined, payType: p.payType ?? undefined,
     });
   }
   return out.sort((a, b) => a.nextDay - b.nextDay);
 }
 
-const CATS = new Set(["Rent", "Loan/EMI", "Subscriptions"]);
-const HINT = /\b(emi|loan|sip|insurance|premium|rent|installment|instalment|subscription|netflix|spotify|prime|recharge|broadband|postpaid|fastag|school|tuition)\b/i;
-const INCOME_HINT = /salary|payroll|stipend|pension/i;
+const CATS = new Set(["Rent", "Loan/EMI", "Subscriptions", "Insurance", "Household", "Education"]);
+const HINT = /\b(emi|loan|sip|insurance|premium|rent|installment|instalment|subscription|netflix|spotify|prime|recharge|broadband|postpaid|fastag|school|tuition|maid|maintenance)\b/i;
+const INCOME_HINT = /salary|payroll|stipend|pension|\brent\b|tenant|client|invoice|retainer/i;
+/** Moving money between your own accounts or cards: never a bill to ask about. */
+const OWN_MONEY = /\bself\b|own account|credit card|card payment|wallet|paytm add|sweep|\bfd\b|fixed deposit|\bppf\b/i;
+/** Payments to or from a person's own bank account (rent to a landlord, a maid, a tenant paying you) under this size are ignored. */
+export const PERSON_MIN = 2000;
+const PERSON_CATS = new Set(["Transfers", "People"]);
 
 /**
  * Payments in the last ~45 days that look like they could repeat but have not repeated three times yet
  * (typical when someone has only uploaded a month or two). We ask the user rather than guess.
+ * Sizeable payments to or from a person count too: landlords, tenants and household staff often use
+ * personal accounts, so the bank text says only a name and we must ask what the payment is.
  */
 export function candidateRecurring(txns: Txn[], asOfDay: number, detected: RecurringItem[]): RecurringItem[] {
   const used = new Set(detected.flatMap((r) => r.txnIds));
@@ -75,8 +81,10 @@ export function candidateRecurring(txns: Txn[], asOfDay: number, detected: Recur
   const ids = new Map<string, string[]>();
   for (const t of txns) {
     if (t.day > asOfDay || t.day < asOfDay - 44 || used.has(t.id)) continue;
-    if (["Refund", "Transfers", "Investments", "People", "Cash", "Credit card"].includes(t.category) || Math.abs(t.amount) < 50) continue;
-    const ok = t.amount > 0 ? INCOME_HINT.test(t.description) : CATS.has(t.category) || HINT.test(t.description);
+    if (["Refund", "Investments", "Cash", "Credit card"].includes(t.category) || Math.abs(t.amount) < 50 || OWN_MONEY.test(t.description)) continue;
+    const toPerson = PERSON_CATS.has(t.category) && Math.abs(t.amount) >= PERSON_MIN;
+    if (!toPerson && PERSON_CATS.has(t.category)) continue;
+    const ok = toPerson || (t.amount > 0 ? INCOME_HINT.test(t.description) : CATS.has(t.category) || HINT.test(t.description));
     if (!ok) continue;
     const k = keyOf(t);
     (ids.get(k) ?? ids.set(k, []).get(k)!).push(t.id);

@@ -4,6 +4,31 @@ export const toDay = (iso: string): number => {
 };
 export const fromDay = (n: number): string => new Date(n * 86400000).toISOString().slice(0, 10);
 
+/** Calendar months a cadence stands for (monthly = 1, quarterly = 3, half-yearly = 6, yearly = 12), or 0 for day-based ones. */
+const cadenceMonths = (cadenceDays: number) =>
+  cadenceDays >= 28 && cadenceDays <= 31 ? 1 : cadenceDays >= 89 && cadenceDays <= 92 ? 3 : cadenceDays >= 180 && cadenceDays <= 184 ? 6 : cadenceDays >= 360 && cadenceDays <= 366 ? 12 : 0;
+
+/**
+ * The day `times` cycles after `day`. Monthly, quarterly and yearly cadences follow the calendar, so a salary
+ * on the 1st stays on the 1st (fixed 30-day steps drift a day in every 31-day month and can skip a payment).
+ * Always step from the same anchor with `times`, so the 31st does not slide to the 28th after February.
+ */
+export function addCadence(day: number, cadenceDays: number, times = 1): number {
+  const months = cadenceMonths(cadenceDays);
+  if (!months) return day + cadenceDays * times;
+  const d = new Date(day * 86400000);
+  const y = d.getUTCFullYear(), m = d.getUTCMonth() + months * times;
+  const lastDom = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+  return Math.floor(Date.UTC(y, m, Math.min(d.getUTCDate(), lastDom)) / 86400000);
+}
+
+/** First occurrence strictly after `afterDay` of a series last seen on `lastDay`. */
+export function nextAfter(lastDay: number, cadenceDays: number, afterDay: number): number {
+  let n = 1;
+  while (addCadence(lastDay, cadenceDays, n) <= afterDay) n++;
+  return addCadence(lastDay, cadenceDays, n);
+}
+
 export const sum = (a: number[]) => a.reduce((s, x) => s + x, 0);
 export const mean = (a: number[]) => (a.length ? sum(a) / a.length : 0);
 export const std = (a: number[]) => {

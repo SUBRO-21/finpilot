@@ -18,6 +18,54 @@ model User {
   prefs          RecurringPref[]
   planned        PlannedItem[]
   rules          CategoryRule[]
+  goals          SavingsGoal[]
+  holdings       Holding[]
+  trades         Trade[]
+}
+
+/// A savings goal ("₹50,000 for a trip by March"), checked against the user's real savings pace.
+model SavingsGoal {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId     String   @db.ObjectId
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  label      String
+  target     Float
+  saved      Float    @default(0)
+  targetDate DateTime
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+}
+
+/// Current portfolio snapshot from a broker holdings CSV. Each upload replaces the previous snapshot.
+model Holding {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @db.ObjectId
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  symbol    String
+  quantity  Float
+  avgPrice  Float
+  lastPrice Float
+  sector    String?
+  updatedAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+/// One executed buy or sell from a broker tradebook CSV.
+model Trade {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @db.ObjectId
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  symbol    String
+  date      DateTime
+  side      String // BUY | SELL
+  quantity  Float
+  price     Float
+  tradeId   String // broker trade id, or a fingerprint when the file has none; used to skip duplicates
+
+  @@unique([userId, tradeId])
+  @@index([userId, date])
 }
 
 model Transaction {
@@ -52,6 +100,7 @@ model RecurringPref {
   category   String
   newAmount  Float?
   endDate    DateTime?
+  payType    String? // what the user said it is for ("Rent", "Household help"), see engine/paytypes.ts
   updatedAt  DateTime  @updatedAt
 
   @@unique([userId, key])

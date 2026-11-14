@@ -13,6 +13,8 @@ const links = [
   ["/spending", "Spending"],
   ["/insights", "Insights"],
   ["/bills", "Bills"],
+  ["/goals", "Goals"],
+  ["/portfolio", "Portfolio"],
   ["/transactions", "Transactions"],
 ] as const;
 

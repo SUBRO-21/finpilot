@@ -1,5 +1,5 @@
 import { prisma } from "@finos/db";
-import { candidateRecurring, fromDay, merchantName, toDay, type RecurringItem } from "@finos/engine";
+import { addCadence, candidateRecurring, fromDay, guessPayType, merchantName, nextAfter, payTypeCategory, toDay, type RecurringItem } from "@finos/engine";
 import { Router } from "express";
 import { z } from "zod";
 import type { AuthedRequest } from "../auth";
@@ -21,9 +21,13 @@ function kindOf(r: RecurringItem) {
 
 function shape(r: RecurringItem) {
   return {
-    key: r.key, name: r.amount > 0 ? titleCase(r.name) : merchantName(r.name), raw: r.name, amount: r.amount, kind: kindOf(r),
+    // Salary lines read best as written; other money in (a tenant's UPI, a client's RTGS) is cleaned to the payer's name
+    key: r.key, name: r.amount > 0 && /salary|payroll|stipend|pension/i.test(r.name) ? titleCase(r.name) : merchantName(r.name), raw: r.name, amount: r.amount, kind: kindOf(r),
     cadenceDays: r.cadenceDays, cadenceLabel: r.cadenceLabel, lastDate: fromDay(r.lastDay), nextDate: fromDay(r.nextDay),
     occurrences: r.occurrences, category: r.category, source: r.source ?? "detected",
+    // What the payment is for: the user's answer, else our guess (null = we cannot tell and must ask)
+    payType: r.payType ?? guessPayType(r.category, r.amount, r.name),
+    toPerson: r.category === "Transfers" || r.category === "People",
   };
 }
 
@@ -62,6 +66,7 @@ const answer = z.object({
   newAmount: z.number().positive().optional(),
   remaining: z.number().int().min(1).max(240).optional(), // payments still to come, including the next one
   cadenceDays: z.number().int().min(7).max(400).optional(), // for payments we only saw once
+  payType: z.string().min(1).max(40).optional(), // "What is this payment for?" (engine/paytypes.ts)
 });
 
 planRouter.post("/recurring", async (req, res) => {
@@ -76,16 +81,28 @@ planRouter.post("/recurring", async (req, res) => {
   if (!item) return res.status(404).json({ error: "That payment is no longer in your history." });
   if (p.data.decision === "CHANGE" && !p.data.newAmount) return res.status(400).json({ error: "Enter the new amount." });
   if (p.data.decision === "ENDS" && !p.data.remaining) return res.status(400).json({ error: "Enter how many payments are left." });
+  const typeCategory = p.data.payType ? payTypeCategory(p.data.payType, item.amount) : null;
+  if (p.data.payType && !typeCategory) return res.status(400).json({ error: "Choose what this payment is for from the list." });
+
+  // The type the user picked recategorizes every past payment in this series, and a payee rule
+  // makes future imports of the same payee land in that category too.
+  const category = typeCategory ?? item.category;
+  if (typeCategory && typeCategory !== item.category) {
+    await prisma.transaction.updateMany({ where: { userId, id: { in: item.txnIds } }, data: { category, categorySource: "user" } });
+    const labels = [...new Set(c.txns.filter((t) => item.txnIds.includes(t.id)).map((t) => t.description))];
+    for (const label of labels)
+      await prisma.categoryRule.upsert({ where: { userId_label: { userId, label } }, create: { userId, label, category }, update: { category } });
+  }
 
   const cadence = p.data.cadenceDays ?? item.cadenceDays;
-  let next = item.lastDay + cadence;
-  while (next <= c.asOfDay) next += cadence;
-  const endDay = p.data.decision === "ENDS" ? next + (p.data.remaining! - 1) * cadence : null;
+  const next = nextAfter(item.lastDay, cadence, c.asOfDay);
+  const endDay = p.data.decision === "ENDS" ? addCadence(next, cadence, p.data.remaining! - 1) : null;
   const data = {
     decision: p.data.decision, name: item.name, amount: item.amount, cadenceDays: cadence,
-    lastDate: new Date(fromDay(item.lastDay) + "T00:00:00Z"), category: item.category,
+    lastDate: new Date(fromDay(item.lastDay) + "T00:00:00Z"), category,
     newAmount: p.data.decision === "CHANGE" ? p.data.newAmount! : null,
     endDate: endDay ? new Date(fromDay(endDay) + "T00:00:00Z") : null,
+    payType: p.data.payType ?? null,
   };
   await prisma.recurringPref.upsert({
     where: { userId_key: { userId, key: p.data.key } },

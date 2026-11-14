@@ -1,5 +1,5 @@
 import type { RecurringItem, Txn } from "./types";
-import { mean, median, std } from "./util";
+import { mean, median, nextAfter, std } from "./util";
 
 const CADENCES: [number, string][] = [[7, "weekly"], [14, "fortnightly"], [30, "monthly"], [91, "quarterly"], [365, "yearly"]];
 
@@ -36,8 +36,7 @@ export function detectRecurring(txns: Txn[], asOfDay: number): RecurringItem[] {
     if (amtCv > 0.35) continue;
     const lastDay = g[g.length - 1].day;
     if (asOfDay - lastDay > cad * 2) continue;
-    let nextDay = lastDay + cad;
-    while (nextDay <= asOfDay) nextDay += cad;
+    const nextDay = nextAfter(lastDay, cad, asOfDay);
     const confidence = Math.max(0.05, Math.min(0.99, (1 - gapCv) * (1 - amtCv) * Math.min(1, g.length / 6)));
     out.push({
       key, name: g[g.length - 1].description, amount: amtMed, cadenceDays: cad, cadenceLabel: label,

@@ -15,11 +15,11 @@ export function prevMonth(m: string) {
 /** "UPI/BLINKIT/GROCERIES" -> "Blinkit", "ATM WDL - HDFC ATM KORAMANGALA" -> "Atm wdl" */
 export function merchantName(desc: string) {
   // Labels produced by the statement reader ("Grocery store", "Person ending 1261") are already clean
-  const raw = /[\/]|\s-\s|^(pos|upi|neft|imps|rtgs|ecs|atm|chq|cc)/i.test(desc) || /\d{5,}/.test(desc);
+  const raw = /[\/]|\s-\s|^(pos|upi|neft|imps|rtgs|ecs|atm|chq|cc)\b/i.test(desc) || /\d{5,}/.test(desc);
   if (!raw) return desc === desc.toUpperCase() ? desc.toLowerCase().replace(/(^|\s)(\S)/g, (_m, a: string, b: string) => a + b.toUpperCase()).trim() : desc.trim();
   const cleaned = desc
     .replace(/^pos\s+\S*x{2,}\S*\s+/i, "")
-    .replace(/^(upi\/|neft-|rtgs-|imps-\d*-?|ecs\/nach\s*-\s*|atm wdl\s*-\s*|chq paid\s*-\s*\d*\s*-?\s*|cc payment\s*-\s*)/i, "")
+    .replace(/^(upi\/|pos\/|neft-|rtgs-|imps-\d*-?|ecs\/nach\s*-\s*|atm wdl\s*-\s*|chq paid\s*-\s*\d*\s*-?\s*|cc payment\s*-\s*)/i, "")
     .split(/[/\-]|\s{2,}/)[0]
     .replace(/[0-9]{5,}/g, "")
     .trim();

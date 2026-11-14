@@ -1,14 +1,17 @@
 export const CATEGORIES = [
   "Income", "Rent", "Groceries", "Dining", "Transport", "Utilities", "Subscriptions",
-  "Loan/EMI", "Shopping", "Health", "Entertainment", "Travel", "Education", "Transfers",
+  "Loan/EMI", "Insurance", "Household", "Shopping", "Health", "Entertainment", "Travel", "Education", "Transfers",
   "People", "Investments", "Cash", "Credit card", "Fees", "Refund", "Other",
 ] as const;
 
 const RULES: [string, RegExp][] = [
   ["Income", /salary|payroll|stipend|invoice paid|client payment|freelance|dividend|interest credit/i],
   ["Loan/EMI", /\bemi\b|loan|mortgage|installment|instalment/i],
+  ["Investments", /mutual fund|\bsip\b|\bdemat\b|zerodha|groww|upstox|\bnps\b/i],
   ["Rent", /\brent\b|landlord|lease/i],
   ["Subscriptions", /netflix|spotify|prime|hotstar|youtube|icloud|google one|adobe|notion|chatgpt|openai|subscription|membership/i],
+  ["Insurance", /insurance|\blic\b|policy premium|term plan|health cover/i],
+  ["Household", /\bmaid\b|house ?help|\bcook\b|nanny|driver salary|domestic help/i],
   ["Utilities", /electric|water bill|gas bill|broadband|internet|wifi|jio|airtel|vodafone|recharge|utility/i],
   ["Groceries", /grocer|supermarket|bigbasket|blinkit|zepto|dmart|walmart|kroger|market|instamart/i],
   ["Dining", /restaurant|cafe|coffee|starbucks|zomato|swiggy|mcdonald|domino|pizza|food|dine/i],

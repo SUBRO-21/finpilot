@@ -5,6 +5,8 @@ const PATHS: Record<string, string> = {
   Utilities: "M13 2 4 14h7l-1 8 9-12h-7z",
   Subscriptions: "M17 2l4 4-4 4M3 11V9a3 3 0 0 1 3-3h15M7 22l-4-4 4-4M21 13v2a3 3 0 0 1-3 3H3",
   "Loan/EMI": "M3 21h18M5 21V10M9 21V10M15 21V10M19 21V10M2 10l10-7 10 7z",
+  Insurance: "M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z",
+  Household: "M4 21V11l8-7 8 7v10M9 21v-5a3 3 0 0 1 6 0v5",
   Rent: "M3 10.5 12 3l9 7.5V21h-6v-6H9v6H3z",
   Shopping: "M6 7h12l1 14H5zM9 7a3 3 0 0 1 6 0",
   Health: "M12 21s-8-5.2-8-11a4.5 4.5 0 0 1 8-2.5A4.5 4.5 0 0 1 20 10c0 5.8-8 11-8 11z",

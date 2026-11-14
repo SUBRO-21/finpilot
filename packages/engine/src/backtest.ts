@@ -21,7 +21,7 @@ export interface BacktestResult {
 }
 
 /** Rolling-origin evaluation: forecast from past cutoffs using only data available then, score against what happened. */
-export function backtest(txns: Txn[], openingBalance: number, horizon = 14, folds = 4): BacktestResult {
+export function backtest(txns: Txn[], openingBalance: number, horizon = 14, folds = 4, opts: { lookbackDays?: number; halfLifeDays?: number | null } = {}): BacktestResult {
   if (!txns.length) return { folds: [], mae: 0, wape: 0, coverage: 0, verdict: "No data" };
   const first = Math.min(...txns.map((t) => t.day));
   const last = Math.max(...txns.map((t) => t.day));
@@ -30,7 +30,7 @@ export function backtest(txns: Txn[], openingBalance: number, horizon = 14, fold
     const cutoff = last - k * horizon;
     if (cutoff - first < 45) continue; // need enough training history
     const past = txns.filter((t) => t.day <= cutoff);
-    const f = forecast({ txns: past, openingBalance, asOfDay: cutoff, horizon, paths: 300, seed: 7 });
+    const f = forecast({ txns: past, openingBalance, asOfDay: cutoff, horizon, paths: 300, seed: 7, ...opts });
     const errs: number[] = [];
     const actuals: number[] = [];
     let inside = 0;

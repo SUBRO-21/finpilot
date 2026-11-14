@@ -253,6 +253,32 @@ export default function Overview() {
               <div className="item"><span className="muted">Inside range</span><span className="num">{pct(bt.coverage)}</span></div>
             </div>
           </>) : <p className="muted small" style={{ marginTop: 12 }}>{bt.verdict}.</p>}
+          {bt?.lookback && (
+            <div style={{ marginTop: 16 }}>
+              <div className="item" style={{ padding: 0 }}><span className="muted">History used for spending</span><span className="small" style={{ fontWeight: 600, textAlign: "right" }}>{bt.lookback.chosen}</span></div>
+              <p className="small muted" style={{ marginTop: 6 }}>{bt.lookback.reason}.</p>
+              {bt.lookback.scores.length > 0 && (
+                <details style={{ marginTop: 8 }}>
+                  <summary className="small" style={{ cursor: "pointer", fontWeight: 600 }}>How this was chosen</summary>
+                  <p className="small muted" style={{ marginTop: 8 }}>
+                    We re-ran the forecast from {bt.lookback.folds} past dates using only what was known then, once for each option, and compared it with what really happened over the next {bt.lookback.horizon} days. Lower score is better.
+                  </p>
+                  <div className="table-wrap" style={{ marginTop: 8 }}>
+                    <table className="ptable" style={{ fontSize: 13 }}>
+                      <thead><tr><th>History</th><th className="r">Score</th><th className="r">Avg miss</th><th className="r">Inside range</th></tr></thead>
+                      <tbody>
+                        {bt.lookback.scores.map((s: any) => (
+                          <tr key={s.key} style={s.label === bt.lookback.chosen ? { fontWeight: 600 } : undefined}>
+                            <td style={{ whiteSpace: "normal" }}>{s.label}</td><td className="r num">{s.loss.toFixed(3)}</td><td className="r num">{money(s.mae)}</td><td className="r num">{pct(s.coverage)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </details>
+              )}
+            </div>
+          )}
         </section>
       </div>
     </div>

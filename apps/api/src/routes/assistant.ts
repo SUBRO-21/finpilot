@@ -1,8 +1,9 @@
-import { buildInsights, forecast, fromDay, healthScore, simulate, suggestLimits, type Scenario } from "@finos/engine";
+import { buildInsights, forecast, fromDay, healthScore, priceHikes, simulate, suggestLimits, type Scenario } from "@finos/engine";
+import { goalPlans } from "./goals";
 import { Router } from "express";
 import { z } from "zod";
 import type { AuthedRequest } from "../auth";
-import { client, MODEL } from "../ai";
+import { chat, provider, type ChatMessage } from "../ai";
 import { loadContext } from "../context";
 
 export const assistantRouter = Router();
@@ -16,7 +17,7 @@ const TOOLS = [
     type: "function",
     function: {
       name: "get_overview",
-      description: "The user's current financial picture: balance, forecast risk, safe-to-spend, health score, income and spending, this month's categories, top merchants, recurring bills and suggested budgets. Call this first for any question about their money.",
+      description: "The user's current financial picture: balance, forecast risk, safe-to-spend, health score, income and spending, this month's categories, top merchants, recurring bills, suggested budgets, recent price rises on bills, savings goals and monthly savings pace. Call this first for any question about their money.",
       parameters: { type: "object", properties: {}, additionalProperties: false },
     },
   },
@@ -57,7 +58,7 @@ const TOOLS = [
 ] as const;
 
 assistantRouter.post("/chat", async (req, res) => {
-  if (!client) return res.status(503).json({ error: "The assistant is off. Add GROQ_API_KEY to the API environment." });
+  if (!provider) return res.status(503).json({ error: "The assistant is off. Add GROQ_API_KEY or GEMINI_API_KEY to apps/api/.env." });
   const p = body.safeParse(req.body);
   if (!p.success) return res.status(400).json({ error: "Send between 1 and 24 messages of up to 1,500 characters." });
 
@@ -67,6 +68,7 @@ assistantRouter.post("/chat", async (req, res) => {
   const base = forecast({ ...c, horizon: 60 });
   const ins = buildInsights(c.txns, c.openingBalance, c.asOfDay);
   const health = healthScore(ins, base, c.recurring);
+  const goals = await goalPlans(c.user.id);
   const simulations: unknown[] = [];
   const used: string[] = [];
 
@@ -83,6 +85,9 @@ assistantRouter.post("/chat", async (req, res) => {
         topMerchants90d: ins.merchants,
         recurring: c.recurring.map((r) => ({ name: r.name, amount: r.amount, every: r.cadenceLabel, next: fromDay(r.nextDay) })),
         suggestedMonthlyBudgets: suggestLimits(c.txns, c.recurring, base).slice(0, 6).map((l) => ({ category: l.category, budget: l.suggested, average: l.avgMonthly })),
+        recentPriceRises: priceHikes(c.recurring, c.txns, c.asOfDay).map((h) => ({ name: h.name, from: h.from, to: h.to, extraPerYear: h.extraPerYear })),
+        savingsGoals: goals.goals.map((g: any) => ({ goal: g.label, target: g.target, saved: g.saved, by: g.targetDate, neededPerMonth: g.monthlyNeeded, status: g.status, why: g.reasons })),
+        monthlySavingsPace: goals.pace,
       };
     }
     let scenario: Scenario;
@@ -107,7 +112,7 @@ assistantRouter.post("/chat", async (req, res) => {
     };
   };
 
-  const messages: any[] = [
+  const messages: ChatMessage[] = [
     {
       role: "system",
       content:
@@ -125,8 +130,7 @@ assistantRouter.post("/chat", async (req, res) => {
 
   try {
     for (let i = 0; i < 5; i++) {
-      const r = await (client.chat.completions.create as any)({ model: MODEL, temperature: 0.3, max_tokens: 700, messages, tools: TOOLS, tool_choice: "auto" });
-      const m = r.choices[0]?.message;
+      const m = await chat({ temperature: 0.3, max_tokens: 700, messages, tools: TOOLS });
       if (m?.tool_calls?.length) {
         messages.push({ role: "assistant", content: m.content ?? "", tool_calls: m.tool_calls });
         for (const call of m.tool_calls) {

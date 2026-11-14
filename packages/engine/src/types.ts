@@ -23,6 +23,7 @@ export interface RecurringItem {
   userConfirmed?: boolean; // came from the user, not detection
   pref?: string; // CONTINUE | CHANGE | ENDS | STOP
   source?: "detected" | "candidate";
+  payType?: string; // what the user said the payment is for
 }
 
 export interface Anomaly {

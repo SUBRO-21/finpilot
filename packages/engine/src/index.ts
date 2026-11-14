@@ -12,3 +12,8 @@ export * from "./backtest";
 export * from "./insights";
 export * from "./spending";
 export * from "./prefs";
+export * from "./paytypes";
+export * from "./goals";
+export * from "./alerts";
+export * from "./portfolio";
+export * from "./lookback";

@@ -1,6 +1,6 @@
 import { detectRecurring } from "./recurring";
 import type { Flow, Forecast, RecurringItem, Txn } from "./types";
-import { fromDay, median, quantile, rng, sum } from "./util";
+import { addCadence, fromDay, median, quantile, rng, sum } from "./util";
 
 export interface ForecastInput {
   txns: Txn[];
@@ -11,7 +11,13 @@ export interface ForecastInput {
   extraFlows?: Flow[];
   paths?: number;
   seed?: number;
+  /** How many past days of everyday spending and one-off income to learn from (default 90). Recurring items always use all history. */
+  lookbackDays?: number;
+  /** If set, older days count less: a day this many days old counts half as much as yesterday. */
+  halfLifeDays?: number | null;
 }
+
+export const DEFAULT_LOOKBACK = 90;
 
 export function balanceAt(txns: Txn[], openingBalance: number, day: number) {
   return openingBalance + sum(txns.filter((t) => t.day <= day).map((t) => t.amount));
@@ -31,21 +37,37 @@ export function forecast(o: ForecastInput): Forecast {
   const startBalance = balanceAt(hist, openingBalance, asOfDay);
   const firstDay = hist.length ? Math.min(...hist.map((t) => t.day)) : asOfDay;
   const historyDays = asOfDay - firstDay + 1;
-  const win = Math.max(1, Math.min(90, historyDays));
+  const lookback = Math.max(7, o.lookbackDays ?? DEFAULT_LOOKBACK);
+  const halfLife = o.halfLifeDays ?? null;
+  const win = Math.max(1, Math.min(lookback, historyDays));
   const winStart = asOfDay - win + 1;
 
   const recIds = new Set(recurring.flatMap((r) => r.txnIds));
   const variable = hist.filter((t) => !recIds.has(t.id) && t.day >= winStart);
   const dailyExp = new Array<number>(win).fill(0);
   for (const t of variable) if (t.amount < 0) dailyExp[t.day - winStart] += -t.amount;
-  const incomeEvents = variable.filter((t) => t.amount > 0).map((t) => t.amount);
-  // Short histories over-read lumpy credits (a bonus, an FD maturity): spread them over at least 90 days
-  const incomeRate = incomeEvents.length / Math.max(win, 90);
+  // Day weights: equal, or halving every `halfLife` days back so recent habits count more
+  const weight = (day: number) => (halfLife ? Math.pow(0.5, (asOfDay - day) / halfLife) : 1);
+  const cum = new Float64Array(win);
+  for (let i = 0, acc = 0; i < win; i++) cum[i] = acc += weight(winStart + i);
+  const totalW = cum[win - 1];
+  const sampleDay = (u: number) => { // weighted pick of a past day, by binary search on cumulative weights
+    let lo = 0, hi = win - 1; const target = u * totalW;
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (cum[mid] < target) lo = mid + 1; else hi = mid; }
+    return lo;
+  };
+  const incomeTx = variable.filter((t) => t.amount > 0);
+  const incomeEvents = incomeTx.map((t) => t.amount);
+  const incomeW = incomeTx.map((t) => weight(t.day));
+  const incomeCum = incomeW.map(((acc) => (w: number) => (acc += w))(0));
+  const pickIncome = (u: number) => { const target = u * incomeCum[incomeCum.length - 1]; let i = 0; while (incomeCum[i] < target) i++; return incomeEvents[i]; };
+  // Short histories over-read lumpy credits (a bonus, an FD maturity): spread them over at least 90 days' worth of weight
+  const incomeRate = sum(incomeW) / Math.max(totalW, 90);
 
   const det = new Float64Array(horizon + 1);
   for (const r of recurring) {
     if (r.stopped) continue;
-    for (let d = r.nextDay; d <= asOfDay + horizon; d += r.cadenceDays) {
+    for (let n = 0, d = r.nextDay; d <= asOfDay + horizon; d = addCadence(r.nextDay, r.cadenceDays, ++n)) {
       if (r.endDay != null && d > r.endDay) break;
       if (d > asOfDay) det[d - asOfDay] += r.amount;
     }
@@ -63,8 +85,8 @@ export function forecast(o: ForecastInput): Forecast {
     let neg = -1;
     for (let d = 1; d <= horizon; d++) {
       bal += det[d];
-      bal -= dailyExp[Math.floor(rand() * win)];
-      if (incomeEvents.length && rand() < incomeRate) bal += incomeEvents[Math.floor(rand() * incomeEvents.length)];
+      bal -= dailyExp[halfLife ? sampleDay(rand()) : Math.floor(rand() * win)];
+      if (incomeEvents.length && rand() < incomeRate) bal += halfLife ? pickIncome(rand()) : incomeEvents[Math.floor(rand() * incomeEvents.length)];
       cols[d].push(bal);
       if (bal < min) min = bal;
       if (bal < 0 && neg < 0) neg = d;
@@ -95,7 +117,7 @@ export function forecast(o: ForecastInput): Forecast {
     uncertainty: level, uncertaintyReasons: reasons,
     assumptions: [
       `${recurring.length} recurring items are projected on their expected dates`,
-      `Variable spending is resampled from the last ${win} days (avg ${(sum(dailyExp) / win).toFixed(0)}/day); one-off income is assumed at a cautious rate`,
+      `Variable spending is resampled from the last ${win} days${halfLife ? `, recent days weighted more (half-life ${halfLife} days)` : ""} (avg ${(sum(dailyExp) / win).toFixed(0)}/day); one-off income is assumed at a cautious rate`,
       `${paths} simulated paths; band shows 10th-90th percentile`,
     ],
     recurringUsed: recurring.length,

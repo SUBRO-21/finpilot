@@ -13,7 +13,7 @@ const dedupeKey = (t: { ref?: string | null; date: string; description: string; 
 
 /**
  * Body: { csv: "<file text>", replace?: boolean, force?: boolean }.
- * Statement hints (UPI merchant codes, payee names) and keyword rules categorize first; Groq handles the leftovers.
+ * Statement hints (UPI merchant codes, payee names) and keyword rules categorize first; the AI provider handles the leftovers.
  * Duplicates are skipped by bank transaction id. `replace` wipes this user's earlier data first, which is what you want
  * when switching to a different account. Without it, the new file's opening balance is checked against the running
  * balance; an unrelated-looking statement is held back until the caller resends it with `force`.

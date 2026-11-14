@@ -1,4 +1,4 @@
-import { backtest, buildInsights, detectAnomalies, forecast, fromDay, healthScore, spendingDetail, spendingOverview, suggestLimits, type Period } from "@finos/engine";
+import { backtest, buildInsights, detectAnomalies, forecast, fromDay, healthScore, priceHikes, spendingDetail, spendingOverview, subscriptionReview, suggestLimits, type Period } from "@finos/engine";
 import { Router } from "express";
 import type { AuthedRequest } from "../auth";
 import { aiExplain } from "../ai";
@@ -35,6 +35,10 @@ analysisRouter.get("/summary", async (req, res) => {
     recurring: c.recurring.map((r) => ({ ...r, nextDate: fromDay(r.nextDay), lastDate: fromDay(r.lastDay), endDate: r.endDay ? fromDay(r.endDay) : null })),
     anomalies: anomalies.slice(0, 6).map((a) => ({ ...a, description: byId.get(a.txnId)?.description, date: fromDay(byId.get(a.txnId)!.day) })),
     limits: suggestLimits(c.txns, c.recurring, f).map((l) => ({ ...l, spent: spent.get(l.category) ?? 0 })),
+    alerts: (() => {
+      const hikes = priceHikes(c.recurring, c.txns, c.asOfDay);
+      return { priceHikes: hikes, ...subscriptionReview(c.recurring, hikes) };
+    })(),
   });
 });
 
@@ -46,10 +50,14 @@ analysisRouter.get("/insights", async (req, res) => {
 
 analysisRouter.get("/backtest", async (req, res) => {
   const c = await loadContext(uid(req));
-  res.json(backtest(c.txns, c.openingBalance, horizonOf(req.query.horizon, 14)));
+  res.json({
+    ...backtest(c.txns, c.openingBalance, horizonOf(req.query.horizon, 14), 4, { lookbackDays: c.lookbackDays, halfLifeDays: c.halfLifeDays }),
+    // Which amount of history the forecast learns from, and how each option scored on this user's past
+    lookback: { chosen: c.lookback.chosen.label, reason: c.lookback.reason, folds: c.lookback.folds, horizon: c.lookback.horizon, scores: c.lookback.scores },
+  });
 });
 
-/** Groq explanation of the current outlook, grounded in engine output. */
+/** AI explanation of the current outlook, grounded in engine output. */
 analysisRouter.post("/explain", async (req, res) => {
   const c = await loadContext(uid(req));
   if (!c.txns.length) return res.status(400).json({ error: "Import transactions first." });

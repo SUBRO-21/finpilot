@@ -37,7 +37,7 @@ const FAQ: [string, string][] = [
   ["Why does a payment show a shop type like Grocery store?", "UPI statements include a merchant category code for shops. FinOS reads it to label and categorize the payment. The original bank text is shown when you hover a transaction."],
   ["Why is my forecast marked low confidence?", "Usually because there is less than about 45 days of history, or no repeating bills were found yet. Importing more months fixes both."],
   ["A transaction landed in the wrong category.", "Open Transactions and change it from the category menu. It is applied right away and used by budgets and forecasts."],
-  ["What gets sent to the AI?", "Descriptions of transactions the app could not categorize by itself are sent to Groq to be categorized. When you use the assistant, summary figures about your finances are sent so it can answer. Nothing is sent otherwise."],
+  ["What gets sent to the AI?", "Descriptions of transactions the app could not categorize by itself are sent to the AI provider (Groq or Google Gemini, whichever is configured) to be categorized. When you use the assistant, summary figures about your finances are sent so it can answer. Nothing is sent otherwise."],
   ["Is this financial advice?", "No. Forecasts and assistant answers are estimates built from your past transactions. They can be wrong, especially with limited history."],
 ];
 

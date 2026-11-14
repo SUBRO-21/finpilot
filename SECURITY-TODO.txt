@@ -1,0 +1,33 @@
+FinPilot - dependency vulnerabilities to fix later
+(from `npm audit`, 2026-11-15: 6 vulnerabilities, 1 moderate / 5 high, from 3 root causes)
+
+1. zod 3.25.76  -- HIGH, FIX FIRST
+   Issue:  Memory exhaustion when validating oversized constrained collections
+           (arrays/sets with .max() etc.). https://github.com/advisories/GHSA-mrhx-c7xc-m3w5
+   Risk:   Real. The API validates user request bodies with zod, and express.json
+           accepts bodies up to 5 MB (apps/api/src/index.ts:13). A huge array in a
+           request could slow down or crash the API.
+   Fix:    - Upgrade to zod@4.6.7 or newer (major version; check the zod usages
+             in the 4 files under apps/api/src that import zod).
+           - Lower the express.json limit from 5mb to what the largest real request
+             (statement upload) actually needs.
+
+2. deepmerge-ts 7.1.5  -- HIGH (also flags @prisma/config and prisma)
+   Issue:  Stack exhaustion when merging recursive object graphs.
+           https://github.com/advisories/GHSA-ggr8-5vv4-36mx
+   Risk:   Practically none. Only the Prisma CLI loads it to read its own config;
+           it never handles user data.
+   Fix:    `npm audit fix` (non-breaking).
+
+3. postcss 8.4.31 (bundled inside next 15.5.29)  -- HIGH (also flags next)
+   Issues: XSS via unescaped </style> in stringify output; arbitrary .map file read
+           via attacker-controlled sourceMappingURL / path traversal.
+           https://github.com/advisories/GHSA-qx2v-qp2m-jg93
+           https://github.com/advisories/GHSA-6g55-p6wh-862q
+           https://github.com/advisories/GHSA-fxqj-rqcc-2cmp
+           https://github.com/advisories/GHSA-r28c-9q8g-f849
+   Risk:   Practically none. Next only runs PostCSS on our own CSS at build time;
+           it never processes user-supplied CSS.
+   Fix:    Requires upgrading to Next 16 (breaking). Can wait.
+
+Suggested order: npm audit fix -> zod v4 + smaller body limit -> Next 16 later.

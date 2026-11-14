@@ -1,14 +1,77 @@
 "use client";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { DATA_EVENT } from "@/components/Shell";
 import { api, day, money } from "@/lib/api";
 
 const perMonth = (r: any) => (Math.abs(r.amount) * 30) / r.cadenceDays;
 
+/** Price rises on repeating payments, and subscriptions worth a second look. */
+function Alerts({ a, onAnswer }: { a: any; onAnswer: (key: string, decision: "CONTINUE" | "STOP") => Promise<void> }) {
+  const [busy, setBusy] = useState<string | null>(null);
+  if (!a || (!a.priceHikes.length && !a.toReview.length)) return null;
+  const answer = async (key: string, d: "CONTINUE" | "STOP") => { setBusy(key); await onAnswer(key, d); setBusy(null); };
+  return (
+    <section className="grid2" style={{ alignItems: "start", marginBottom: 24 }} aria-label="Worth a look">
+      {a.priceHikes.length > 0 && (
+        <div className="card">
+          <div className="between"><h2 className="t-title">Prices that went up</h2><span className="chip warn-chip">{a.priceHikes.length}</span></div>
+          <div className="divider" style={{ marginTop: 16 }}>
+            {a.priceHikes.map((h: any) => (
+              <div className="item" key={h.key} style={{ padding: "13px 0" }}>
+                <div>
+                  <div>{h.name}</div>
+                  <div className="small tag">{money(h.from)} → {money(h.to)} (+{Math.round(h.changePct * 100)}%) since {day(h.since)}</div>
+                </div>
+                <div className="r"><div className="num" style={{ fontWeight: 600 }}>+{money(h.extraPerYear)}</div><div className="small tag">more a year</div></div>
+              </div>
+            ))}
+          </div>
+          <p className="small muted" style={{ marginTop: 14 }}>Worth checking for a cheaper plan, or whether the old price can be kept.</p>
+        </div>
+      )}
+      {a.toReview.length > 0 && (
+        <div className="card">
+          <h2 className="t-title">Still using these?</h2>
+          <p className="small muted" style={{ marginTop: 4 }}>
+            Your statement can&rsquo;t show whether you use a service, only that you pay for it.
+            {a.overlaps.length > 0 && ` You pay for ${a.overlaps.map((o: any) => `${o.names.length} ${o.group.toLowerCase()} services`).join(" and ")}.`}
+          </p>
+          <div className="divider" style={{ marginTop: 14 }}>
+            {a.toReview.map((r: any) => (
+              <div key={r.key} style={{ padding: "13px 0" }}>
+                <div className="between">
+                  <div>
+                    <div>{r.name} {r.group && <span className="chip" style={{ marginLeft: 6 }}>{r.group}</span>}</div>
+                    <div className="small tag">{money(r.amount)} {r.cadenceLabel}</div>
+                  </div>
+                  <div className="r"><div className="num">{money(r.perYear)}</div><div className="small tag">a year</div></div>
+                </div>
+                <div className="row" style={{ marginTop: 10, gap: 8 }}>
+                  <button className="btn ghost sm" disabled={busy === r.key} onClick={() => answer(r.key, "CONTINUE")}>Still using it</button>
+                  <button className="btn ghost sm" disabled={busy === r.key} onClick={() => answer(r.key, "STOP")}>I&rsquo;ll cancel it</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
 export default function Bills() {
   const [s, setS] = useState<any>(null);
   const [err, setErr] = useState("");
-  useEffect(() => { api("/analysis/summary").then(setS).catch((e) => setErr(e.message)); }, []);
+  const load = useCallback(() => api("/analysis/summary").then(setS).catch((e) => setErr(e.message)), []);
+  useEffect(() => { load(); }, [load]);
+  async function answer(key: string, decision: "CONTINUE" | "STOP") {
+    try {
+      await api("/plan/recurring", { body: { key, decision } });
+      window.dispatchEvent(new Event(DATA_EVENT));
+      await load();
+    } catch (e) { setErr((e as Error).message); }
+  }
 
   if (err) return <div className="card"><p className="err" style={{ margin: 0 }}>{err}</p></div>;
   if (!s) return <div className="skeleton" style={{ height: 420, marginTop: 40 }} />;
@@ -38,6 +101,7 @@ export default function Bills() {
         <p className="lead">Bills and income that repeat on a steady rhythm, found from your history.</p>
       </section>
 
+      <Alerts a={s.alerts} onAnswer={answer} />
       <div className="grid2">
         <div className="card pop" style={{ padding: 36 }}>
           <div className="tag">Due in the next 30 days</div>
@@ -75,7 +139,7 @@ export default function Bills() {
             <div className="divider" style={{ marginTop: 18 }}>
               {bills.map((r: any) => (
                 <div className="item" key={r.key} style={{ padding: "13px 0" }}>
-                  <div><div>{r.name}</div><div className="small tag">{r.cadenceLabel}, {r.userConfirmed ? "confirmed by you" : `seen ${r.occurrences} times`}{r.pref === "ENDS" && r.endDate ? `, last payment ${day(r.endDate)}` : ""}{r.pref === "CHANGE" ? ", amount changed" : ""}</div></div>
+                  <div><div>{r.name}</div><div className="small tag">{r.payType ? `${r.payType}, ` : ""}{r.cadenceLabel}, {r.userConfirmed ? "confirmed by you" : `seen ${r.occurrences} times`}{r.pref === "ENDS" && r.endDate ? `, last payment ${day(r.endDate)}` : ""}{r.pref === "CHANGE" ? ", amount changed" : ""}</div></div>
                   <div className="r"><div className="num">{money(r.amount)}</div><div className="small tag num">{money(perMonth(r))} a month</div></div>
                 </div>
               ))}
