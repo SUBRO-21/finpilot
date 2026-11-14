@@ -11,7 +11,6 @@ export async function loadContext(userId: string) {
     description: r.description,
     amount: r.amount,
     category: r.category,
-    isMerchant: r.isMerchant,
   }));
   const asOfDay = txns.length ? Math.max(...txns.map((t) => t.day)) : toDay(new Date().toISOString());
   const recurring = detectRecurring(txns, asOfDay);

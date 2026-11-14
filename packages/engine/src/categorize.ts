@@ -33,11 +33,3 @@ export function categorizeRule(description: string, amount: number): string | nu
   if (amount > 0) return "Income";
   return null;
 }
-
-/** Heuristic: is an outflow's receiver a merchant (vs a person / self / bank)? */
-export function guessMerchant(description: string, amount: number, category: string): boolean {
-  if (amount >= 0) return false;
-  if (["Transfers", "Loan/EMI", "Fees", "Rent"].includes(category)) return false;
-  if (/\b(atm|cash withdrawal|self|neft|imps|rtgs|upi to|sent to|transfer to)\b/i.test(description)) return false;
-  return true;
-}

@@ -1,65 +1,77 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
-import { api, money } from "@/lib/api";
+import Link from "next/link";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { api, dayYear, money } from "@/lib/api";
 
 const CATS = ["Income","Rent","Groceries","Dining","Transport","Utilities","Subscriptions","Loan/EMI","Shopping","Health","Entertainment","Travel","Education","Transfers","Fees","Refund","Other"];
 
 export default function Transactions() {
-  const [rows, setRows] = useState<any[]>([]);
-  const [merchantOnly, setMerchantOnly] = useState(false);
-  const [recalling, setRecalling] = useState<any>(null);
-  const [reason, setReason] = useState("");
+  const [rows, setRows] = useState<any[] | null>(null);
+  const [q, setQ] = useState("");
+  const [cat, setCat] = useState("");
   const [err, setErr] = useState("");
 
-  const load = useCallback(() => api(`/transactions${merchantOnly ? "?merchantOnly=true" : ""}`).then(setRows).catch((e) => setErr(e.message)), [merchantOnly]);
+  const load = useCallback(() => api("/transactions").then(setRows).catch((e) => setErr(e.message)), []);
   useEffect(() => { load(); }, [load]);
 
-  async function patch(id: string, body: object) { await api(`/transactions/${id}`, { method: "PATCH", body }); load(); }
-  async function submitRecall() {
+  const shown = useMemo(
+    () => (rows ?? []).filter((t) => (!cat || t.category === cat) && (!q || t.description.toLowerCase().includes(q.toLowerCase()))),
+    [rows, q, cat],
+  );
+  const net = shown.reduce((a, t) => a + t.amount, 0);
+
+  async function recategorize(id: string, category: string) {
     setErr("");
-    try { await api("/recalls", { body: { transactionId: recalling.id, reason } }); setRecalling(null); setReason(""); load(); }
-    catch (e) { setErr((e as Error).message); }
+    setRows((r) => r && r.map((t) => (t.id === id ? { ...t, category } : t)));
+    try { await api(`/transactions/${id}`, { method: "PATCH", body: { category } }); }
+    catch (e) { setErr((e as Error).message); load(); }
   }
 
   return (
     <>
-      <h1>Transactions</h1>
-      <div className="row" style={{ marginBottom: 12 }}>
-        <label style={{ margin: 0 }}><input type="checkbox" style={{ width: "auto" }} checked={merchantOnly} onChange={(e) => setMerchantOnly(e.target.checked)} /> Merchant payments only</label>
+      <section className="hero" style={{ paddingBottom: 32 }}>
+        <h1 className="h-lg">Every <em>transaction</em>.</h1>
+        <p className="lead">Fix a category and your budgets and forecast learn from it.</p>
+      </section>
+
+      <div className="row" style={{ marginBottom: 20 }}>
+        <input type="search" aria-label="Search transactions" placeholder="Search by description" value={q} onChange={(e) => setQ(e.target.value)} style={{ flex: "1 1 280px", maxWidth: 420 }} />
+        <select aria-label="Filter by category" value={cat} onChange={(e) => setCat(e.target.value)} style={{ width: "auto" }}>
+          <option value="">All categories</option>
+          {CATS.map((c) => <option key={c}>{c}</option>)}
+        </select>
+        {rows && <span className="muted small num">{shown.length} of {rows.length}, net {money(net)}</span>}
       </div>
-      {err && <div className="err">{err}</div>}
-      {recalling && (
-        <div className="card" role="dialog" aria-label="Recall payment">
-          <h2>Recall payment to {recalling.description}</h2>
-          <p className="mute">{money(recalling.amount)} on {recalling.date} · {recalling.recall.daysLeft} days left to recall</p>
-          <label htmlFor="reason">Why are you recalling this payment?</label>
-          <textarea id="reason" rows={3} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Item never arrived, charged twice" />
-          <div className="row" style={{ marginTop: 12 }}>
-            <button disabled={reason.trim().length < 5} onClick={submitRecall}>Request recall</button>
-            <button className="ghost" onClick={() => setRecalling(null)}>Cancel</button>
-          </div>
+      {err && <p className="err">{err}</p>}
+
+      <div className="card" style={{ padding: "20px 16px" }}>
+        <div className="table-wrap">
+          <table>
+            <thead><tr><th>Date</th><th>Description</th><th>Category</th><th className="r">Amount</th></tr></thead>
+            <tbody>
+              {shown.map((t) => (
+                <tr key={t.id}>
+                  <td className="num muted">{dayYear(t.date)}</td>
+                  <td>{t.description}</td>
+                  <td>
+                    <select className="quiet" aria-label={`Category for ${t.description}`} value={t.category} onChange={(e) => recategorize(t.id, e.target.value)}>
+                      {CATS.map((c) => <option key={c}>{c}</option>)}
+                    </select>
+                  </td>
+                  <td className="r num" style={{ fontWeight: 450 }}>{t.amount > 0 ? "+" : ""}{money(t.amount)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-      )}
-      <div className="card" style={{ padding: 0 }}>
-        <table>
-          <thead><tr><th>Date</th><th>Description</th><th>Category</th><th>Receiver</th><th className="right">Amount</th><th></th></tr></thead>
-          <tbody>{rows.map((t) => (
-            <tr key={t.id}>
-              <td>{t.date}</td><td>{t.description}</td>
-              <td><select aria-label="Category" value={t.category} onChange={(e) => patch(t.id, { category: e.target.value })}>{CATS.map((c) => <option key={c}>{c}</option>)}</select></td>
-              <td>{t.amount < 0 ? (
-                <select aria-label="Receiver type" value={t.isMerchant ? "m" : "p"} onChange={(e) => patch(t.id, { isMerchant: e.target.value === "m" })}>
-                  <option value="m">Merchant</option><option value="p">Person / other</option></select>) : <span className="mute">-</span>}</td>
-              <td className={`right ${t.amount < 0 ? "" : "ok"}`}>{money(t.amount)}</td>
-              <td>{t.amount < 0 && (t.recall.eligible
-                ? <button className="ghost" onClick={() => setRecalling(t)}>Recall</button>
-                : t.recall.latest ? <span className="pill">{t.recall.latest.status.replace("_", " ").toLowerCase()}</span>
-                : <span className="mute" title={t.recall.reason}>-</span>)}</td>
-            </tr>))}
-          </tbody>
-        </table>
-        {!rows.length && <p className="mute" style={{ padding: 16 }}>No transactions yet.</p>}
+        {rows && !shown.length && (
+          <div className="empty">
+            {rows.length ? <p>No transactions match your search.</p> : (<><p>No transactions yet.</p><Link href="/import" className="btn">Import a statement</Link></>)}
+          </div>
+        )}
+        {!rows && !err && <div className="empty">Loading transactions…</div>}
       </div>
+      {rows && rows.length >= 500 && <p className="small tag" style={{ marginTop: 14 }}>Showing your latest 500 transactions.</p>}
     </>
   );
 }

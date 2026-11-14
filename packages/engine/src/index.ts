@@ -8,4 +8,5 @@ export * from "./forecast";
 export * from "./limits";
 export * from "./simulate";
 export * from "./backtest";
-export * from "./recall";
+export * from "./insights";
+export * from "./spending";

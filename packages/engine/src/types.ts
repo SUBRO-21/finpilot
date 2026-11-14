@@ -4,7 +4,6 @@ export interface Txn {
   description: string;
   amount: number; // negative = outflow
   category: string;
-  isMerchant: boolean;
 }
 
 export interface RecurringItem {
@@ -63,5 +62,4 @@ export interface ParsedRow {
   date: string; // ISO
   description: string;
   amount: number;
-  merchantHint: boolean | null;
 }

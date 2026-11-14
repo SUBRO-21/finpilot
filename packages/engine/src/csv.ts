@@ -53,7 +53,6 @@ function num(s: string | undefined): number | null {
 /**
  * Accepts bank-statement style CSVs. Needs a date column, a description-ish column,
  * and either `amount` (negative = outflow) or `debit`/`credit` columns.
- * Optional `receiver_type` / `payee_type` column ("merchant" | "person") sets recall eligibility.
  */
 export function parseStatement(text: string): { rows: ParsedRow[]; errors: string[]; openingBalance: number | null } {
   const grid = parseCsvRows(text);
@@ -68,7 +67,6 @@ export function parseStatement(text: string): { rows: ParsedRow[]; errors: strin
   const iCred = find(/credit|deposit/);
   const iBal = head.findIndex((h) => h === "balance" || h === "closing balance");
   let openingBalance: number | null = null;
-  const iType = find(/receiver_type|payee_type|merchant_type|recipient_type/);
   if (iDate < 0 || iDesc < 0 || (iAmt < 0 && iDeb < 0 && iCred < 0))
     return { rows: [], errors: ["Could not find date, description and amount (or debit/credit) columns"], openingBalance: null };
 
@@ -92,13 +90,7 @@ export function parseStatement(text: string): { rows: ParsedRow[]; errors: strin
       errors.push(`Row ${idx + 2} skipped`);
       return;
     }
-    let merchantHint: boolean | null = null;
-    if (iType >= 0) {
-      const t = (r[iType] ?? "").toLowerCase();
-      if (t.includes("merchant") || t.includes("business")) merchantHint = true;
-      else if (t.includes("person") || t.includes("individual") || t.includes("personal")) merchantHint = false;
-    }
-    rows.push({ date, description, amount, merchantHint });
+    rows.push({ date, description, amount });
   });
   return { rows, errors, openingBalance };
 }

@@ -1,8 +1,8 @@
 import Groq from "groq-sdk";
 import { CATEGORIES } from "@finos/engine";
 
-const client = process.env.GROQ_API_KEY ? new Groq({ apiKey: process.env.GROQ_API_KEY }) : null;
-const MODEL = process.env.GROQ_MODEL ?? "llama-3.3-70b-versatile";
+export const client = process.env.GROQ_API_KEY ? new Groq({ apiKey: process.env.GROQ_API_KEY }) : null;
+export const MODEL = process.env.GROQ_MODEL ?? "llama-3.3-70b-versatile";
 
 export const aiEnabled = () => client !== null;
 
@@ -53,5 +53,28 @@ export async function aiExplain(topic: string, facts: unknown): Promise<string> 
     return res.choices[0]?.message?.content?.trim() ?? "No explanation generated.";
   } catch (e) {
     return `Explanation unavailable: ${(e as Error).message}`;
+  }
+}
+
+/** Answers a free-form money question using only the supplied facts. */
+export async function aiAsk(question: string, facts: unknown): Promise<string> {
+  if (!client) return "AI answers are off. Add GROQ_API_KEY to the API environment to turn them on.";
+  try {
+    const res = await client.chat.completions.create({
+      model: MODEL,
+      temperature: 0.2,
+      max_tokens: 500,
+      messages: [
+        {
+          role: "system",
+          content:
+            "You answer questions about one person's finances using ONLY the JSON facts provided. Amounts are Indian rupees. Be concise (under 120 words), concrete, and cite the numbers you use. If the facts cannot answer the question, say what is missing. Never invent numbers. Forecast probabilities are estimates, not guarantees. You are not a licensed financial advisor.",
+        },
+        { role: "user", content: `Facts: ${JSON.stringify(facts)}\n\nQuestion: ${question}` },
+      ],
+    });
+    return res.choices[0]?.message?.content?.trim() ?? "I couldn't produce an answer. Try rephrasing the question.";
+  } catch (e) {
+    return `I couldn't reach the AI service (${(e as Error).message}). Try again in a moment.`;
   }
 }

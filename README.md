@@ -17,13 +17,9 @@ Turborepo monorepo: `apps/web` (Next.js), `apps/api` (Express), `packages/db` (P
 | Anomaly detection | `engine/anomaly.ts` (median/MAD per category) |
 | Auto-categorization | rules first (`engine/categorize.ts`), Groq for leftovers; user overrides |
 | Personalized limits | `engine/limits.ts` (tightens with shortage risk, each with a reason) |
-| Loan / purchase simulation | `engine/simulate.ts` (same seed baseline vs scenario) |
+| Loan / purchase simulation | `engine/simulate.ts`, run by the Groq assistant via tool calling (`api/routes/assistant.ts`) |
 | Explainability | every output carries reasons/assumptions; Groq only narrates engine numbers |
 | Accuracy evaluation | `engine/backtest.ts` (rolling-origin: error, WAPE, p10-p90 coverage) |
-| Merchant recall | `engine/recall.ts`, `api/routes/recalls.ts`, Transactions + Recalls pages |
-
-## Merchant recall
-Outgoing payments whose receiver is a merchant can be recalled within `RECALL_WINDOW_DAYS` (default 120). Receiver type comes from an optional `receiver_type` CSV column, otherwise a heuristic, and can be corrected per transaction. Analytics-only scope: the user records the merchant's response (under review / refunded / rejected / withdrawn); marking *refunded* books a credit so forecasts stay accurate.
 
 ## Notes
 - "Today" for forecasting is the last transaction date, so historical CSVs forecast forward from where they end.
