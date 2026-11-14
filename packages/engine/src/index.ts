@@ -1,5 +1,6 @@
 export * from "./types";
 export * from "./util";
+export * from "./bank";
 export * from "./csv";
 export * from "./categorize";
 export * from "./recurring";
@@ -10,3 +11,4 @@ export * from "./simulate";
 export * from "./backtest";
 export * from "./insights";
 export * from "./spending";
+export * from "./prefs";

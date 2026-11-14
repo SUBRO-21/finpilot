@@ -15,7 +15,7 @@ export function suggestLimits(txns: Txn[], recurring: RecurringItem[], f: Foreca
   const span = Math.max(30, Math.min(90, f.asOfDay - Math.min(...txns.map((t) => t.day), f.asOfDay) + 1));
   const by = new Map<string, number>();
   for (const t of txns)
-    if (t.amount < 0 && !recIds.has(t.id) && t.day >= from && !["Rent", "Loan/EMI", "Transfers"].includes(t.category))
+    if (t.amount < 0 && !recIds.has(t.id) && t.day >= from && !["Rent", "Loan/EMI", "Transfers", "Investments"].includes(t.category))
       by.set(t.category, (by.get(t.category) ?? 0) + -t.amount);
   const risk = f.shortageProbability;
   const factor = risk < 0.1 ? 1 : risk < 0.3 ? 0.9 : risk < 0.6 ? 0.8 : 0.7;

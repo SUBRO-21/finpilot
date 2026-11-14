@@ -44,7 +44,7 @@ const STEPS: Step[] = [
   {
     title: "Keep categories accurate",
     body: "Transactions lists everything and lets you fix a category in one click. Your budgets and forecast learn from every fix.",
-    points: ["You can replay this tour any time from Guide in the top bar"],
+    points: ["You can replay this tour any time from Guide in the Menu at the top right"],
     href: "/transactions", cta: "Open Transactions", hl: "/transactions",
   },
 ];

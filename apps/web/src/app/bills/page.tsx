@@ -22,12 +22,13 @@ export default function Bills() {
     );
 
   const asOf = s.forecast.asOfDay;
-  const bills = s.recurring.filter((r: any) => r.amount < 0);
-  const income = s.recurring.filter((r: any) => r.amount > 0);
+  const bills = s.recurring.filter((r: any) => r.amount < 0 && !r.stopped);
+  const stopped = s.recurring.filter((r: any) => r.stopped);
+  const income = s.recurring.filter((r: any) => r.amount > 0 && !r.stopped);
   const next30 = bills.filter((r: any) => r.nextDay - asOf <= 30);
   const due30 = next30.reduce((a: number, r: any) => a + Math.abs(r.amount), 0);
   const monthly = bills.reduce((a: number, r: any) => a + perMonth(r), 0);
-  const timeline = [...s.recurring].filter((r: any) => r.nextDay - asOf <= 30).sort((a: any, b: any) => a.nextDay - b.nextDay);
+  const timeline = [...s.recurring].filter((r: any) => !r.stopped && r.nextDay - asOf <= 30 && (r.endDay == null || r.nextDay <= r.endDay)).sort((a: any, b: any) => a.nextDay - b.nextDay);
 
   return (
     <>
@@ -74,13 +75,22 @@ export default function Bills() {
             <div className="divider" style={{ marginTop: 18 }}>
               {bills.map((r: any) => (
                 <div className="item" key={r.key} style={{ padding: "13px 0" }}>
-                  <div><div>{r.name}</div><div className="small tag">{r.cadenceLabel}, seen {r.occurrences} times, {Math.round(r.confidence * 100)}% sure</div></div>
+                  <div><div>{r.name}</div><div className="small tag">{r.cadenceLabel}, {r.userConfirmed ? "confirmed by you" : `seen ${r.occurrences} times`}{r.pref === "ENDS" && r.endDate ? `, last payment ${day(r.endDate)}` : ""}{r.pref === "CHANGE" ? ", amount changed" : ""}</div></div>
                   <div className="r"><div className="num">{money(r.amount)}</div><div className="small tag num">{money(perMonth(r))} a month</div></div>
                 </div>
               ))}
               {!bills.length && <p className="muted">No recurring bills found yet. A payment needs three repeats, so more history helps.</p>}
             </div>
           </div>
+          {stopped.length > 0 && (
+            <div className="card fog">
+              <h2 className="t-title">Marked as stopped</h2>
+              <p className="small muted" style={{ marginTop: 4 }}>These are left out of your forecast. <Link href="/review" className="more small">Change an answer</Link></p>
+              <div className="divider" style={{ marginTop: 16 }}>
+                {stopped.map((r: any) => (<div className="item" key={r.key} style={{ padding: "12px 0" }}><div>{r.name}</div><div className="num muted">{money(r.amount)}</div></div>))}
+              </div>
+            </div>
+          )}
           {income.length > 0 && (
             <div className="card fog">
               <h2 className="t-title">Expected income</h2>

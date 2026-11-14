@@ -2,7 +2,7 @@ import { merchantName, prevMonth } from "./insights";
 import type { Txn } from "./types";
 import { fromDay, round2, sum, toDay } from "./util";
 
-const isSpend = (t: Txn) => t.amount < 0 && t.category !== "Transfers";
+const isSpend = (t: Txn) => t.amount < 0 && t.category !== "Transfers" && t.category !== "Investments";
 const monthKey = (d: number) => fromDay(d).slice(0, 7);
 export type Period = "month" | "90d" | "all";
 

@@ -2,7 +2,7 @@ import { backtest, buildInsights, detectAnomalies, forecast, fromDay, healthScor
 import { Router } from "express";
 import type { AuthedRequest } from "../auth";
 import { aiExplain } from "../ai";
-import { loadContext } from "../context";
+import { freshness, loadContext } from "../context";
 
 export const analysisRouter = Router();
 const uid = (r: unknown) => (r as AuthedRequest).userId;
@@ -30,7 +30,9 @@ analysisRouter.get("/summary", async (req, res) => {
     previousMonthSpend: ins.previousMonthSpend,
     income30: ins.income30,
     spend30: ins.spend30,
-    recurring: c.recurring.map((r) => ({ ...r, nextDate: fromDay(r.nextDay), lastDate: fromDay(r.lastDay) })),
+    freshness: { ...freshness(c.asOfDay, true), lastDate: fromDay(c.asOfDay) },
+    planned: c.extraFlows.map((f) => ({ label: f.label, amount: f.amount, date: fromDay(c.asOfDay + f.offset) })),
+    recurring: c.recurring.map((r) => ({ ...r, nextDate: fromDay(r.nextDay), lastDate: fromDay(r.lastDay), endDate: r.endDay ? fromDay(r.endDay) : null })),
     anomalies: anomalies.slice(0, 6).map((a) => ({ ...a, description: byId.get(a.txnId)?.description, date: fromDay(byId.get(a.txnId)!.day) })),
     limits: suggestLimits(c.txns, c.recurring, f).map((l) => ({ ...l, spent: spent.get(l.category) ?? 0 })),
   });

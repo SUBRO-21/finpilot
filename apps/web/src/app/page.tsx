@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ColumnChart, Donut, DONUT_COLORS, Meter, PairedColumns, PaceChart, Ring, Sparkline } from "@/components/Bits";
 import { ForecastChart } from "@/components/ForecastChart";
+import { ageText } from "@/components/Shell";
 import { api, day, dayYear, money, monthLabel, monthShort, pct } from "@/lib/api";
 
 const CONF: Record<string, string> = { LOW: "High", MEDIUM: "Medium", HIGH: "Low" };
@@ -22,10 +23,12 @@ export default function Overview() {
   const [bt, setBt] = useState<any>(null);
   const [horizon, setHorizon] = useState(60);
   const [q, setQ] = useState("");
+  const [st, setSt] = useState<any>(null);
   const [why, setWhy] = useState("");
   const [explaining, setExplaining] = useState(false);
   const [err, setErr] = useState("");
 
+  useEffect(() => { api("/plan/status").then(setSt).catch(() => {}); }, []);
   useEffect(() => { api("/analysis/backtest").then(setBt).catch(() => setBt({ folds: [], verdict: "Accuracy check is unavailable right now" })); }, []);
   useEffect(() => {
     setErr("");
@@ -45,8 +48,8 @@ export default function Overview() {
     );
 
   const f = s.forecast, ins = s.insights;
-  const due30 = s.recurring.filter((r: any) => r.amount < 0 && r.nextDay - f.asOfDay <= 30);
-  const fixedMonthly = s.recurring.filter((r: any) => r.amount < 0).reduce((a: number, r: any) => a + (-r.amount * 30) / r.cadenceDays, 0);
+  const due30 = s.recurring.filter((r: any) => r.amount < 0 && !r.stopped && r.nextDay - f.asOfDay <= 30);
+  const fixedMonthly = s.recurring.filter((r: any) => r.amount < 0 && !r.stopped).reduce((a: number, r: any) => a + (-r.amount * 30) / r.cadenceDays, 0);
   const kept = s.income30 > 0 ? (s.income30 - s.spend30) / s.income30 : null;
   const cats = ins.categories.slice(0, 5).map((c: any) => ({ label: c.category, value: c.amount }));
   const rest = ins.categories.slice(5).reduce((a: number, c: any) => a + c.amount, 0);
@@ -64,13 +67,31 @@ export default function Overview() {
     <div className="dash">
       <div className="dash-head">
         <div>
-          <div className="tag">Hello, {s.name}. Data through {dayYear(f.asOfDate)}</div>
+          <div className="tag">Hello, {s.name}. Data through {dayYear(f.asOfDate)}, {ageText(s.freshness.ageDays)}</div>
           <div style={{ marginTop: 6, maxWidth: "24ch" }}><Headline f={f} /></div>
         </div>
         <div className="seg" role="group" aria-label="Forecast length">
           {[30, 60, 90].map((h) => <button key={h} aria-pressed={horizon === h} onClick={() => setHorizon(h)}>{h} days</button>)}
         </div>
       </div>
+
+      {(s.freshness.level === "stale" || (st && st.pending > 0)) && (
+        <div className="float" style={{ padding: 28 }} role="region" aria-label="Next steps">
+          {s.freshness.level === "stale" && (
+            <div className="between" style={{ alignItems: "center", gap: 24, flexWrap: "wrap" ,padding: 28}}>
+              <div><div className="t-title">Your last transaction is {s.freshness.ageDays} days old</div><p className="muted small" style={{ marginTop: 4 }}>The forecast starts from {dayYear(f.asOfDate)}. Upload this month&rsquo;s statement to bring it up to today.</p></div>
+              <Link href="/import" className="btn sm">Upload statement</Link>
+            </div>
+          )}
+          {s.freshness.level === "stale" && st && st.pending > 0 && <div style={{ borderTop: "1px solid var(--mist)", margin: "20px 0" }} />}
+          {st && st.pending > 0 && (
+            <div className="between" style={{ alignItems: "center", gap: 24, flexWrap: "wrap" }}>
+              <div><div className="t-title">{st.pending} quick question{st.pending === 1 ? "" : "s"} will sharpen your forecast</div><p className="muted small" style={{ marginTop: 4 }}>Tell us what you will keep, cancel or change, such as subscriptions, EMIs and salary.</p></div>
+              <Link href="/review" className="btn sm">Answer questions</Link>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="kpis">
         <div className="card kpi">

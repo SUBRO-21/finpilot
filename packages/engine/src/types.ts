@@ -18,6 +18,11 @@ export interface RecurringItem {
   occurrences: number;
   txnIds: string[];
   category: string;
+  stopped?: boolean; // user said they are cancelling it
+  endDay?: number; // last expected occurrence
+  userConfirmed?: boolean; // came from the user, not detection
+  pref?: string; // CONTINUE | CHANGE | ENDS | STOP
+  source?: "detected" | "candidate";
 }
 
 export interface Anomaly {
@@ -60,6 +65,9 @@ export interface Flow {
 
 export interface ParsedRow {
   date: string; // ISO
-  description: string;
+  description: string; // readable label
   amount: number;
+  raw?: string; // original bank particulars
+  ref?: string; // bank transaction id
+  category?: string; // hint from the statement itself (e.g. UPI merchant code)
 }

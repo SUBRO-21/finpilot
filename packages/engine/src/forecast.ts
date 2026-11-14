@@ -39,11 +39,17 @@ export function forecast(o: ForecastInput): Forecast {
   const dailyExp = new Array<number>(win).fill(0);
   for (const t of variable) if (t.amount < 0) dailyExp[t.day - winStart] += -t.amount;
   const incomeEvents = variable.filter((t) => t.amount > 0).map((t) => t.amount);
-  const incomeRate = incomeEvents.length / win;
+  // Short histories over-read lumpy credits (a bonus, an FD maturity): spread them over at least 90 days
+  const incomeRate = incomeEvents.length / Math.max(win, 90);
 
   const det = new Float64Array(horizon + 1);
-  for (const r of recurring)
-    for (let d = r.nextDay; d <= asOfDay + horizon; d += r.cadenceDays) if (d > asOfDay) det[d - asOfDay] += r.amount;
+  for (const r of recurring) {
+    if (r.stopped) continue;
+    for (let d = r.nextDay; d <= asOfDay + horizon; d += r.cadenceDays) {
+      if (r.endDay != null && d > r.endDay) break;
+      if (d > asOfDay) det[d - asOfDay] += r.amount;
+    }
+  }
   for (const f of extraFlows) if (f.offset >= 1 && f.offset <= horizon) det[f.offset] += f.amount;
 
   const rand = rng(seed);
@@ -89,7 +95,7 @@ export function forecast(o: ForecastInput): Forecast {
     uncertainty: level, uncertaintyReasons: reasons,
     assumptions: [
       `${recurring.length} recurring items are projected on their expected dates`,
-      `Variable spending is resampled from the last ${win} days (avg ${(sum(dailyExp) / win).toFixed(0)}/day)`,
+      `Variable spending is resampled from the last ${win} days (avg ${(sum(dailyExp) / win).toFixed(0)}/day); one-off income is assumed at a cautious rate`,
       `${paths} simulated paths; band shows 10th-90th percentile`,
     ],
     recurringUsed: recurring.length,

@@ -15,6 +15,10 @@ const PATHS: Record<string, string> = {
   Transfers: "M7 7h13M16 3l4 4-4 4M17 17H4M8 13l-4 4 4 4",
   Income: "M12 19V5M5 12l7-7 7 7",
   Refund: "M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5",
+  People: "M16 8a4 4 0 1 1-8 0 4 4 0 0 1 8 0zM4 21a8 8 0 0 1 16 0",
+  Investments: "M3 17l6-6 4 4 8-8M15 7h6v6",
+  Cash: "M3 7h18v10H3zM12 10v4M6.5 10v.01M17.5 14v.01",
+  "Credit card": "M3 6h18v12H3zM3 10h18M7 15h3",
   Other: "M5 12h.01M12 12h.01M19 12h.01",
 };
 

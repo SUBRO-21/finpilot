@@ -3,8 +3,9 @@ import type { Forecast, RecurringItem, Txn } from "./types";
 import { fromDay, round2, sum } from "./util";
 
 const monthKey = (day: number) => fromDay(day).slice(0, 7);
-const isSpend = (t: Txn) => t.amount < 0 && t.category !== "Transfers";
-const isIncome = (t: Txn) => t.amount > 0 && t.category !== "Refund";
+const OWN_MONEY = new Set(["Transfers", "Investments"]); // moving your own money around, not spending or earning
+const isSpend = (t: Txn) => t.amount < 0 && !OWN_MONEY.has(t.category);
+const isIncome = (t: Txn) => t.amount > 0 && t.category !== "Refund" && !OWN_MONEY.has(t.category);
 
 export function prevMonth(m: string) {
   const [y, mo] = m.split("-").map(Number);
@@ -13,11 +14,14 @@ export function prevMonth(m: string) {
 
 /** "UPI/BLINKIT/GROCERIES" -> "Blinkit", "ATM WDL - HDFC ATM KORAMANGALA" -> "Atm wdl" */
 export function merchantName(desc: string) {
+  // Labels produced by the statement reader ("Grocery store", "Person ending 1261") are already clean
+  const raw = /[\/]|\s-\s|^(pos|upi|neft|imps|rtgs|ecs|atm|chq|cc)/i.test(desc) || /\d{5,}/.test(desc);
+  if (!raw) return desc === desc.toUpperCase() ? desc.toLowerCase().replace(/(^|\s)(\S)/g, (_m, a: string, b: string) => a + b.toUpperCase()).trim() : desc.trim();
   const cleaned = desc
     .replace(/^pos\s+\S*x{2,}\S*\s+/i, "")
     .replace(/^(upi\/|neft-|rtgs-|imps-\d*-?|ecs\/nach\s*-\s*|atm wdl\s*-\s*|chq paid\s*-\s*\d*\s*-?\s*|cc payment\s*-\s*)/i, "")
     .split(/[/\-]|\s{2,}/)[0]
-    .replace(/[0-9]+/g, "")
+    .replace(/[0-9]{5,}/g, "")
     .trim();
   const base = cleaned.length >= 3 ? cleaned : normalizeKey(desc) || desc;
   return base.toLowerCase().replace(/(^|\s)(\S)/g, (_m, sp: string, c: string) => sp + c.toUpperCase());
@@ -137,7 +141,7 @@ const clamp = (n: number) => Math.max(0, Math.min(100, n));
 export function healthScore(ins: Insights, f: Forecast, recurring: RecurringItem[]): Health {
   const dailySpend = ins.spend30 / 30;
   const runwayDays = dailySpend > 0 ? f.startBalance / dailySpend : 365;
-  const monthlyFixed = sum(recurring.filter((r) => r.amount < 0).map((r) => (-r.amount * 30) / r.cadenceDays));
+  const monthlyFixed = sum(recurring.filter((r) => r.amount < 0 && !r.stopped).map((r) => (-r.amount * 30) / r.cadenceDays));
   const fixedRatio = ins.income30 > 0 ? monthlyFixed / ins.income30 : null;
   const parts: Health["parts"] = [
     { name: "Cash runway", weight: 0.3, score: clamp((runwayDays / 90) * 100), detail: `Your balance covers about ${Math.round(runwayDays)} days of spending` },

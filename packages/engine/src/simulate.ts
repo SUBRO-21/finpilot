@@ -28,10 +28,10 @@ export interface SimulationResult {
 }
 
 /** Same seed for both runs, so the difference is attributable to the decision rather than sampling noise. */
-export function simulate(base: Omit<ForecastInput, "extraFlows">, s: Scenario): SimulationResult {
+export function simulate(base: ForecastInput, s: Scenario): SimulationResult {
   const { flows, emi } = scenarioFlows(s, base.horizon);
   const baseline = forecast(base);
-  const scenario = forecast({ ...base, extraFlows: flows });
+  const scenario = forecast({ ...base, extraFlows: [...(base.extraFlows ?? []), ...flows] });
   const risk = scenario.shortageProbability;
   return {
     baseline, scenario, emi,

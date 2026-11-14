@@ -30,7 +30,11 @@ const WORDS: [string, string][] = [
 ];
 
 const FAQ: [string, string][] = [
-  ["Which CSV formats work?", "Any bank statement with a date column, a description column and either one signed Amount column or separate Debit and Credit columns. Dates can be 2026-11-01, 01/11/2026 or 01-Nov-2026. An Opening Balance row sets your starting balance."],
+  ["What should I do each month?", "Upload your latest statement. FinOS then asks only about what is new: whether a subscription or EMI will continue, change or end, and whether anything big is coming up. Your earlier answers are remembered."],
+  ["What does “Last transaction” in the top bar mean?", "It shows how old your newest transaction is. Up to 7 days is up to date, up to 35 days is due for an update, and older than that is out of date, so the forecast is starting from the past."],
+  ["Which CSV formats work?", "Most bank statements. Files with a header row need a date, a description and either one signed Amount column or Debit and Credit columns. Header-less exports (like Federal Bank) are recognised too, including UPI details that wrap onto a second line. Dates can be 2026-11-01, 01/11/2026 or 15-NOV-2025. A running balance, or an Opening Balance row, sets your starting balance."],
+  ["Why are so many payments under People?", "UPI payments to individuals carry no shop information, so they are grouped as People. If a payee is really your own other account or an investment, change its category once and choose “Apply to all”. Future imports remember it."],
+  ["Why does a payment show a shop type like Grocery store?", "UPI statements include a merchant category code for shops. FinOS reads it to label and categorize the payment. The original bank text is shown when you hover a transaction."],
   ["Why is my forecast marked low confidence?", "Usually because there is less than about 45 days of history, or no repeating bills were found yet. Importing more months fixes both."],
   ["A transaction landed in the wrong category.", "Open Transactions and change it from the category menu. It is applied right away and used by budgets and forecasts."],
   ["What gets sent to the AI?", "Descriptions of transactions the app could not categorize by itself are sent to Groq to be categorized. When you use the assistant, summary figures about your finances are sent so it can answer. Nothing is sent otherwise."],

@@ -5,6 +5,7 @@ import { authRouter } from "./routes/auth";
 import { txnRouter } from "./routes/transactions";
 import { analysisRouter } from "./routes/analysis";
 import { assistantRouter } from "./routes/assistant";
+import { planRouter } from "./routes/plan";
 import { requireAuth } from "./auth";
 
 const app = express();
@@ -16,6 +17,7 @@ app.use("/auth", authRouter);
 app.use("/transactions", requireAuth, txnRouter);
 app.use("/analysis", requireAuth, analysisRouter);
 app.use("/assistant", requireAuth, assistantRouter);
+app.use("/plan", requireAuth, planRouter);
 
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error(err);

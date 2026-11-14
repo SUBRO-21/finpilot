@@ -15,6 +15,9 @@ model User {
   openingBalance Float         @default(0)
   createdAt      DateTime      @default(now())
   transactions   Transaction[]
+  prefs          RecurringPref[]
+  planned        PlannedItem[]
+  rules          CategoryRule[]
 }
 
 model Transaction {
@@ -27,7 +30,53 @@ model Transaction {
   category       String   @default("Other")
   categorySource String   @default("rule") // rule | ai | user | import
   isRefund       Boolean  @default(false)
+  raw            String? // original bank particulars
+  ref            String? // bank transaction id, used to skip duplicates
   createdAt      DateTime @default(now())
 
   @@index([userId, date])
+}
+
+/// The user's answer about a repeating payment or income ("will you continue this?").
+/// Keeps a snapshot so a payment the user confirmed can drive the forecast even before it has repeated 3 times.
+model RecurringPref {
+  id         String    @id @default(auto()) @map("_id") @db.ObjectId
+  userId     String    @db.ObjectId
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  key        String
+  decision   String // CONTINUE | CHANGE | ENDS | STOP | ONEOFF
+  name       String
+  amount     Float // signed
+  cadenceDays Int
+  lastDate   DateTime
+  category   String
+  newAmount  Float?
+  endDate    DateTime?
+  updatedAt  DateTime  @updatedAt
+
+  @@unique([userId, key])
+}
+
+/// A known one-off future item: a big purchase, a bonus, a refund due.
+model PlannedItem {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @db.ObjectId
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  label     String
+  amount    Float // signed
+  date      DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId, date])
+}
+
+/// "Always treat this payee as <category>", learned when the user recategorizes and applies it to all.
+model CategoryRule {
+  id       String @id @default(auto()) @map("_id") @db.ObjectId
+  userId   String @db.ObjectId
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  label    String
+  category String
+
+  @@unique([userId, label])
 }

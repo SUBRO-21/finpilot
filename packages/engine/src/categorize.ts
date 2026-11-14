@@ -1,7 +1,7 @@
 export const CATEGORIES = [
   "Income", "Rent", "Groceries", "Dining", "Transport", "Utilities", "Subscriptions",
   "Loan/EMI", "Shopping", "Health", "Entertainment", "Travel", "Education", "Transfers",
-  "Fees", "Refund", "Other",
+  "People", "Investments", "Cash", "Credit card", "Fees", "Refund", "Other",
 ] as const;
 
 const RULES: [string, RegExp][] = [

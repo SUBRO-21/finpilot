@@ -42,7 +42,7 @@ export default function Spending() {
       <section className="hero" style={{ paddingBottom: 32 }}>
         <div className="tag">{dayYear(d.from)} to {dayYear(d.to)}</div>
         <h1 className="h-lg">Where your money <em>went</em>.</h1>
-        <p className="lead">Every rupee grouped by category and by shop or app. Select any tile for its full history. Transfers between your own accounts are left out.</p>
+        <p className="lead">Every rupee grouped by category and by shop, app or person. Select any tile for its full history. Transfers and investments are left out.</p>
       </section>
 
       <div className="row" style={{ justifyContent: "space-between", marginBottom: 24 }}>
@@ -90,7 +90,7 @@ export default function Spending() {
       </section>
 
       <section className="section" aria-labelledby="bymer">
-        <div className="head"><h2 className="h" id="bymer">Shops and <em>apps</em></h2><span className="tag">Top {d.merchants.length}</span></div>
+        <div className="head"><h2 className="h" id="bymer">Shops, apps and <em>people</em></h2><span className="tag">Top {d.merchants.length}</span></div>
         <div className="tiles">
           {d.merchants.map((m: any) => (
             <Link key={m.name} href={`/spending/merchant/${encodeURIComponent(m.name)}`} className="tile-link" aria-label={`${m.name}, ${money(m.amount)}. View history`}>
