@@ -1,0 +1,10 @@
+PS 2.2  |  AI-Powered Personal Financial Operating System for Predictive Cash Flow Management Individuals and small businesses often struggle to manage irregular income, recurring expenses, subscriptions, loan obligations, and upcoming financial commitments. Existing expense trackers primarily provide historical spending summaries rather than actionable financial predictions. Build an intelligent financial management platform that analyzes transaction histories, identifies recurring payments, predicts future cash flow, detects unusual spending patterns, and forecasts potential liquidity shortages. The system should recommend personalized spending limits, simulate financial decisions such as loan repayments or large purchases, and automatically categorize transactions. It must provide explainable recommendations, identify uncertainty in financial forecasts, and evaluate prediction accuracy against historical transaction data.
+
+
+use 
+turborepo
+mongodb
+prisma 
+nextjs
+express
+groq for AI

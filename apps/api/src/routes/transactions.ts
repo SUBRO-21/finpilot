@@ -1,0 +1,82 @@
+import { prisma } from "@finos/db";
+import { ACTIVE_RECALL, CATEGORIES, categorizeRule, guessMerchant, parseStatement, recallEligibility } from "@finos/engine";
+import { Router } from "express";
+import { z } from "zod";
+import type { AuthedRequest } from "../auth";
+import { aiCategorize } from "../ai";
+
+export const txnRouter = Router();
+const windowDays = () => Number(process.env.RECALL_WINDOW_DAYS ?? 120);
+
+/** Body: { csv: "<file text>" }. Rules categorize first; Groq handles the leftovers. Duplicates are skipped. */
+txnRouter.post("/import", async (req, res) => {
+  const userId = (req as unknown as AuthedRequest).userId;
+  const csv = z.string().min(10).safeParse(req.body?.csv);
+  if (!csv.success) return res.status(400).json({ error: "Upload a CSV file with a header row" });
+  const { rows, errors, openingBalance } = parseStatement(csv.data);
+  if (!rows.length) return res.status(400).json({ error: errors[0] ?? "No valid rows found", errors });
+
+  const cats = rows.map((r) => categorizeRule(r.description, r.amount));
+  const unknown = [...new Set(rows.filter((_, i) => !cats[i]).map((r) => r.description))].slice(0, 80);
+  const ai = await aiCategorize(unknown);
+
+  const existing = await prisma.transaction.findMany({ where: { userId }, select: { date: true, description: true, amount: true } });
+  const seen = new Set(existing.map((e) => `${e.date.toISOString().slice(0, 10)}|${e.description}|${e.amount}`));
+  const data = [];
+  let aiCount = 0;
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    const k = `${r.date}|${r.description}|${r.amount}`;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    const fromAi = !cats[i] && ai[r.description];
+    if (fromAi) aiCount++;
+    const category = cats[i] ?? ai[r.description] ?? "Other";
+    data.push({
+      userId, date: new Date(r.date + "T00:00:00Z"), description: r.description, amount: r.amount, category,
+      categorySource: cats[i] ? "rule" : fromAi ? "ai" : "rule",
+      isMerchant: r.merchantHint ?? guessMerchant(r.description, r.amount, category),
+      isRefund: category === "Refund" && r.amount > 0,
+    });
+  }
+  if (data.length) await prisma.transaction.createMany({ data });
+  // Statement's opening balance seeds the account only if this user has no earlier history
+  if (openingBalance != null && existing.length === 0) await prisma.user.update({ where: { id: userId }, data: { openingBalance } });
+  res.json({ imported: data.length, duplicatesSkipped: rows.length - data.length, aiCategorized: aiCount, warnings: errors.slice(0, 10) });
+});
+
+txnRouter.get("/", async (req, res) => {
+  const userId = (req as unknown as AuthedRequest).userId;
+  const where: Record<string, unknown> = { userId };
+  if (typeof req.query.category === "string") where.category = req.query.category;
+  if (req.query.merchantOnly === "true") Object.assign(where, { isMerchant: true, amount: { lt: 0 } });
+  const rows = await prisma.transaction.findMany({
+    where, orderBy: { date: "desc" }, take: 500,
+    include: { recalls: { select: { id: true, status: true } } },
+  });
+  const w = windowDays();
+  res.json(
+    rows.map((t) => {
+      const active = t.recalls.find((r) => ACTIVE_RECALL.includes(r.status as never));
+      return {
+        id: t.id, date: t.date.toISOString().slice(0, 10), description: t.description, amount: t.amount,
+        category: t.category, categorySource: t.categorySource, isMerchant: t.isMerchant,
+        recall: { ...recallEligibility(t, !!active, w), latest: t.recalls.at(-1) ?? null },
+      };
+    }),
+  );
+});
+
+const patch = z.object({ category: z.enum(CATEGORIES).optional(), isMerchant: z.boolean().optional() });
+txnRouter.patch("/:id", async (req, res) => {
+  const userId = (req as unknown as AuthedRequest).userId;
+  const p = patch.safeParse(req.body);
+  if (!p.success) return res.status(400).json({ error: "Invalid category or merchant flag" });
+  const t = await prisma.transaction.findFirst({ where: { id: req.params.id, userId } });
+  if (!t) return res.status(404).json({ error: "Transaction not found" });
+  const u = await prisma.transaction.update({
+    where: { id: t.id },
+    data: { ...p.data, ...(p.data.category ? { categorySource: "user" } : {}) },
+  });
+  res.json({ id: u.id, category: u.category, isMerchant: u.isMerchant });
+});

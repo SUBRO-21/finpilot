@@ -1,0 +1,16 @@
+{
+  "name": "finos",
+  "private": true,
+  "packageManager": "npm@10.8.0",
+  "workspaces": ["apps/*", "packages/*"],
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "db:generate": "npm -w @finos/db run generate",
+    "db:push": "npm -w @finos/db run push"
+  },
+  "devDependencies": {
+    "turbo": "^2.3.0",
+    "typescript": "^5.6.0"
+  }
+}

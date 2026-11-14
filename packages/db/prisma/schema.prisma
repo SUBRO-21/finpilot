@@ -1,0 +1,61 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String        @id @default(auto()) @map("_id") @db.ObjectId
+  email          String        @unique
+  name           String
+  passwordHash   String
+  openingBalance Float         @default(0)
+  createdAt      DateTime      @default(now())
+  transactions   Transaction[]
+  recalls        Recall[]
+}
+
+model Transaction {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId         String   @db.ObjectId
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date           DateTime
+  description    String
+  amount         Float // negative = outflow, positive = inflow
+  category       String   @default("Other")
+  categorySource String   @default("rule") // rule | ai | user | import
+  isMerchant     Boolean  @default(false) // receiver is a merchant (recall-eligible if outflow)
+  isRefund       Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  recalls        Recall[]
+
+  @@index([userId, date])
+}
+
+enum RecallStatus {
+  REQUESTED
+  UNDER_REVIEW
+  REFUNDED
+  REJECTED
+  WITHDRAWN
+}
+
+model Recall {
+  id            String       @id @default(auto()) @map("_id") @db.ObjectId
+  userId        String       @db.ObjectId
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactionId String       @db.ObjectId
+  transaction   Transaction  @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  reason        String
+  status        RecallStatus @default(REQUESTED)
+  note          String?
+  history       Json         @default("[]") // [{status, at, note}]
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@index([userId, status])
+  @@index([transactionId])
+}
